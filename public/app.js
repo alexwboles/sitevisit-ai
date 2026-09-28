@@ -46,11 +46,12 @@
         return;
       }
       el.innerHTML = j.visits.map(function (v) {
-        return '<div class="card"><h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
-          '<div class="muted">' + esc(v.number) + " · " + esc(v.trade) + "</div>" +
-          '<div class="muted" style="font-size:.85rem">' + esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
-          '<div class="muted" style="font-size:.82rem;margin-top:6px">' + v.observations.length + " observations" +
-          (v.generated ? " · ⚡ work product ready" : "") + "</div></div>";
+        return '<div class="card"><div class="ticket-no">' + esc(v.number) + '</div>' +
+          '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
+          '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
+          esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
+          '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
+          (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
       }).join("");
     }).catch(function (e) {
       document.getElementById("visit-list").innerHTML = '<p class="muted">Error: ' + esc(e.message) + "</p>";
@@ -104,7 +105,7 @@
   function totals() {
     var t = 0;
     (wp ? wp.items : []).forEach(function (it) { t += Number(it.qty || 0) * Number(it.unitPrice || 0); });
-    document.getElementById("wp-total").textContent = "— estimated total " + money(t);
+    document.getElementById("wp-total").textContent = money(t);
   }
 
   function renderWp() {
@@ -221,12 +222,13 @@
       }
       var t = 0;
       v.generated.items.forEach(function (it) { t += Number(it.qty || 0) * Number(it.unitPrice || 0); });
-      g.innerHTML = '<div class="panel"><h3>Quote draft — ' + money(t) + "</h3>" +
-        '<table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
+      g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
+        '<span class="quote-total">' + money(t) + "</span></div>" +
+        '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
         v.generated.items.map(function (it) {
           return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
             esc(it.unit) + "</td><td>" + money(it.unitPrice) + "</td></tr>";
-        }).join("") + "</tbody></table>" +
+        }).join("") + "</tbody></table></div>" +
         "<h3>Punch list</h3><ul class='checklist'>" +
         v.generated.punchList.map(function (p) {
           return "<li>" + (p.done ? "☑" : "☐") + " " + esc(p.task) + "</li>";
