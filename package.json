@@ -1,0 +1,1 @@
+{"description":"Job walkthrough notes to quote draft, punch list, and follow-ups - 100% local","engines":{"node":">=16"},"license":"MIT","main":"server.js","name":"sitevisit-ai","scripts":{"start":"node server.js","test":"bash test/smoke.sh && bash test/e2e.sh"},"version":"0.1.0"}

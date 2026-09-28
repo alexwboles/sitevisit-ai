@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiteVisit AI — walkthrough notes to quote draft</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🧰 <strong>SiteVisit AI</strong> <span class="tag">100% local</span></div>
+  <nav>
+    <a href="#/" id="nav-list">Visits</a>
+    <a href="#/new" id="nav-new" class="btn">+ New visit</a>
+  </nav>
+</header>
+
+<main id="app">
+  <section id="view-list" class="view">
+    <h1>Site visits</h1>
+    <p class="muted">Log a walkthrough, tap one button, get a quote draft, punch list, and follow-ups.</p>
+    <div id="visit-list" class="cards"></div>
+  </section>
+
+  <section id="view-edit" class="view hidden">
+    <h1>New site visit</h1>
+    <div class="grid2">
+      <label>Client name <input id="v-client" type="text" placeholder="Jane Smith"></label>
+      <label>Trade <select id="v-trade"></select></label>
+    </div>
+    <div class="grid2">
+      <label>Address <input id="v-address" type="text" placeholder="123 Main St"></label>
+      <label>Visit date <input id="v-date" type="date"></label>
+    </div>
+    <h3>Observations</h3>
+    <p class="muted">One per line-worth — e.g. "master bath faucet drips", "caulk failing around tub".</p>
+    <div id="obs-list"></div>
+    <button id="btn-add-obs" class="btn ghost">+ Add observation</button>
+    <h3>Photo notes</h3>
+    <p class="muted">Describe what each photo shows, e.g. "photo 3: water stain on ceiling".</p>
+    <div id="photo-list"></div>
+    <button id="btn-add-photo" class="btn ghost">+ Add photo note</button>
+    <div class="row">
+      <button id="btn-generate" class="btn primary">⚡ Generate work product</button>
+      <button id="btn-save-visit" class="btn">Save visit</button>
+      <a href="#/" class="btn ghost">Cancel</a>
+    </div>
+    <p class="muted" id="edit-msg"></p>
+
+    <div id="work-product" class="hidden">
+      <h2>Work product</h2>
+      <h3>Quote draft <span class="muted" id="wp-total"></span></h3>
+      <table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th><th></th></tr></thead>
+      <tbody id="wp-items"></tbody></table>
+      <button id="btn-add-item" class="btn ghost">+ Add line item</button>
+      <h3>Punch list</h3>
+      <ul id="wp-punch" class="checklist"></ul>
+      <h3>Follow-ups</h3>
+      <ul id="wp-follow" class="checklist"></ul>
+      <div class="row">
+        <button id="btn-print" class="btn">🖨️ Print summary</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-doc" class="view hidden">
+    <div class="row between">
+      <h1 id="sv-title"></h1>
+      <span id="sv-num" class="pill"></span>
+    </div>
+    <div class="panel">
+      <div id="sv-meta" class="muted"></div>
+      <h3>Observations</h3><ul id="sv-obs"></ul>
+      <h3>Photo notes</h3><ul id="sv-photos"></ul>
+    </div>
+    <div id="sv-generated"></div>
+    <div class="row"><a href="#/" class="btn ghost">Back to visits</a>
+      <button id="btn-print2" class="btn">🖨️ Print summary</button></div>
+  </section>
+</main>
+
+<footer class="muted">SiteVisit AI — estimates are starting points from a local price bank. Verify pricing for your market.</footer>
+<script src="app.js"></script>
+</body>
+</html>
