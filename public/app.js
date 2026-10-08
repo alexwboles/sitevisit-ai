@@ -37,26 +37,53 @@
   }
 
   /* ---------- list ---------- */
+  var allVisits = [];
+
+  function visitCard(v) {
+    return '<div class="card"><div class="ticket-no">' + esc(v.number) + '</div>' +
+      '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
+      '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
+      esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
+      '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
+      (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
+  }
+
+  function applyVisitFilter() {
+    var q = document.getElementById("visit-search").value.trim().toLowerCase();
+    var tr = document.getElementById("visit-trade-filter").value;
+    var list = allVisits.filter(function (v) {
+      if (tr && v.trade !== tr) return false;
+      if (!q) return true;
+      var hay = (v.client + " " + v.number + " " + (v.address || "") + " " + v.trade).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    var el = document.getElementById("visit-list");
+    if (!allVisits.length) {
+      el.innerHTML = '<p class="muted">No visits yet. <a href="#/new">Log your first walkthrough</a>.</p>';
+    } else if (!list.length) {
+      el.innerHTML = '<p class="muted">No visits match your search.</p>';
+    } else {
+      el.innerHTML = list.map(visitCard).join("");
+    }
+  }
+
   function renderList() {
     show("view-list");
+    var sel = document.getElementById("visit-trade-filter");
+    if (!sel.options.length) {
+      sel.innerHTML = '<option value="">All trades</option>' +
+        TRADES.map(function (t) { return "<option>" + t + "</option>"; }).join("");
+    }
     api("/api/visits").then(function (j) {
-      var el = document.getElementById("visit-list");
-      if (!j.visits.length) {
-        el.innerHTML = '<p class="muted">No visits yet. <a href="#/new">Log your first walkthrough</a>.</p>';
-        return;
-      }
-      el.innerHTML = j.visits.map(function (v) {
-        return '<div class="card"><div class="ticket-no">' + esc(v.number) + '</div>' +
-          '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
-          '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
-          esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
-          '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
-          (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
-      }).join("");
+      allVisits = j.visits;
+      applyVisitFilter();
     }).catch(function (e) {
       document.getElementById("visit-list").innerHTML = '<p class="muted">Error: ' + esc(e.message) + "</p>";
     });
   }
+
+  document.getElementById("visit-search").addEventListener("input", applyVisitFilter);
+  document.getElementById("visit-trade-filter").addEventListener("change", applyVisitFilter);
 
   /* ---------- editor ---------- */
   var wp = null; // current generated work product (editable)
@@ -83,6 +110,8 @@
     wp = null;
     document.getElementById("work-product").classList.add("hidden");
     document.getElementById("edit-msg").textContent = "";
+    document.getElementById("wp-tax").value = "0";
+    document.getElementById("wp-discount").value = "0";
     var sel = document.getElementById("v-trade");
     sel.innerHTML = TRADES.map(function (t) { return "<option>" + t + "</option>"; }).join("");
     document.getElementById("v-date").value = new Date().toISOString().slice(0, 10);
@@ -102,11 +131,29 @@
     dynRow(document.getElementById("photo-list"), "photo note…");
   });
 
-  function totals() {
-    var t = 0;
-    (wp ? wp.items : []).forEach(function (it) { t += Number(it.qty || 0) * Number(it.unitPrice || 0); });
-    document.getElementById("wp-total").textContent = money(t);
+  function readTaxDiscount() {
+    return {
+      tax: Number(document.getElementById("wp-tax").value) || 0,
+      discount: Number(document.getElementById("wp-discount").value) || 0
+    };
   }
+
+  function totals() {
+    var td = readTaxDiscount();
+    var t = window.SiteVisitEngine
+      ? window.SiteVisitEngine.quoteTotals(wp ? wp.items : [], td.tax, td.discount)
+      : { subtotal: 0, taxAmt: 0, discountAmt: 0, total: 0, taxPct: td.tax, discountPct: td.discount };
+    if (wp) wp.totals = t;
+    document.getElementById("wp-total").textContent = money(t.total);
+    document.getElementById("wp-breakdown").innerHTML =
+      '<div class="trow"><span>Subtotal</span><span>' + money(t.subtotal) + "</span></div>" +
+      (t.discountAmt ? '<div class="trow"><span>Discount (' + t.discountPct + '%)</span><span>−' + money(t.discountAmt) + "</span></div>" : "") +
+      (t.taxAmt ? '<div class="trow"><span>Tax (' + t.taxPct + '%)</span><span>' + money(t.taxAmt) + "</span></div>" : "") +
+      '<div class="trow grand"><span>Total</span><span>' + money(t.total) + "</span></div>";
+  }
+
+  document.getElementById("wp-tax").addEventListener("input", totals);
+  document.getElementById("wp-discount").addEventListener("input", totals);
 
   function renderWp() {
     if (!wp) return;
@@ -218,25 +265,44 @@
       var g = document.getElementById("sv-generated");
       if (!v.generated) {
         g.innerHTML = '<p class="muted">No work product generated for this visit yet.</p>';
-        return;
+      } else {
+        var st = v.generated.totals || { subtotal: 0, discountPct: 0, discountAmt: 0, taxPct: 0, taxAmt: 0, total: 0 };
+        // recompute so old visits (saved before tax/discount existed) still add up
+        if (window.SiteVisitEngine) {
+          st = window.SiteVisitEngine.quoteTotals(v.generated.items, st.taxPct || 0, st.discountPct || 0);
+        }
+        g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
+          '<span class="quote-total">' + money(st.total) + "</span></div>" +
+          '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
+          v.generated.items.map(function (it) {
+            return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
+              esc(it.unit) + "</td><td>" + money(it.unitPrice) + "</td></tr>";
+          }).join("") + "</tbody></table></div>" +
+          '<div class="totals-breakdown">' +
+          '<div class="trow"><span>Subtotal</span><span>' + money(st.subtotal) + "</span></div>" +
+          (st.discountAmt ? '<div class="trow"><span>Discount (' + st.discountPct + '%)</span><span>−' + money(st.discountAmt) + "</span></div>" : "") +
+          (st.taxAmt ? '<div class="trow"><span>Tax (' + st.taxPct + '%)</span><span>' + money(st.taxAmt) + "</span></div>" : "") +
+          '<div class="trow grand"><span>Total</span><span>' + money(st.total) + "</span></div></div>" +
+          "<h3>Punch list</h3><ul class='checklist'>" +
+          v.generated.punchList.map(function (p) {
+            return "<li>" + (p.done ? "☑" : "☐") + " " + esc(p.task) + "</li>";
+          }).join("") + "</ul><h3>Follow-ups</h3><ul class='checklist'>" +
+          v.generated.followUps.map(function (f) {
+            return "<li>" + (f.done ? "☑" : "☐") + " " + esc(f.task) +
+              ' <span class="muted">— due ' + esc(f.due) + "</span></li>";
+          }).join("") + "</ul></div>";
       }
-      var t = 0;
-      v.generated.items.forEach(function (it) { t += Number(it.qty || 0) * Number(it.unitPrice || 0); });
-      g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
-        '<span class="quote-total">' + money(t) + "</span></div>" +
-        '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
-        v.generated.items.map(function (it) {
-          return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
-            esc(it.unit) + "</td><td>" + money(it.unitPrice) + "</td></tr>";
-        }).join("") + "</tbody></table></div>" +
-        "<h3>Punch list</h3><ul class='checklist'>" +
-        v.generated.punchList.map(function (p) {
-          return "<li>" + (p.done ? "☑" : "☐") + " " + esc(p.task) + "</li>";
-        }).join("") + "</ul><h3>Follow-ups</h3><ul class='checklist'>" +
-        v.generated.followUps.map(function (f) {
-          return "<li>" + (f.done ? "☑" : "☐") + " " + esc(f.task) +
-            ' <span class="muted">— due ' + esc(f.due) + "</span></li>";
-        }).join("") + "</ul></div>";
+      document.getElementById("btn-dup-visit").onclick = function () {
+        api("/api/visits/" + id + "/duplicate", { method: "POST" })
+          .then(function (r) { location.hash = "#/visit/" + r.visit.id; })
+          .catch(function (e) { alert("Error: " + e.message); });
+      };
+      document.getElementById("btn-del-visit").onclick = function () {
+        if (!confirm("Delete visit " + v.number + " (" + v.client + ")? This cannot be undone.")) return;
+        api("/api/visits/" + id, { method: "DELETE" })
+          .then(function () { location.hash = "#/"; })
+          .catch(function (e) { alert("Error: " + e.message); });
+      };
     }).catch(function (e) {
       document.getElementById("sv-title").textContent = "Error: " + e.message;
     });

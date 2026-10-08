@@ -24,6 +24,11 @@
   <section id="view-list" class="view">
     <h1>Site visits</h1>
     <p class="lede">Log a walkthrough, tap one button, get a quote draft, punch list, and follow-ups.</p>
+    <div class="toolbar">
+      <input id="visit-search" type="search" placeholder="Search by client, address, or number…" aria-label="Search visits">
+      <select id="visit-trade-filter" aria-label="Filter by trade"></select>
+      <a class="btn ghost" href="/api/visits/export.csv" download>Export CSV</a>
+    </div>
     <div id="visit-list" class="cards"></div>
   </section>
 
@@ -67,6 +72,11 @@
         <tbody id="wp-items"></tbody></table>
         </div>
         <button id="btn-add-item" class="btn ghost">+ Add line item</button>
+        <div class="grid2 totals-grid">
+          <label>Tax % <input id="wp-tax" type="number" min="0" step="any" value="0"></label>
+          <label>Discount % <input id="wp-discount" type="number" min="0" max="100" step="any" value="0"></label>
+        </div>
+        <div id="wp-breakdown" class="totals-breakdown"></div>
         <h3>Punch list</h3>
         <ul id="wp-punch" class="checklist"></ul>
         <h3>Follow-ups</h3>
@@ -96,11 +106,14 @@
     </div>
     <div id="sv-generated"></div>
     <div class="row"><a href="#/" class="btn ghost">Back to visits</a>
-      <button id="btn-print2" class="btn">Print summary</button></div>
+      <button id="btn-print2" class="btn">Print summary</button>
+      <button id="btn-dup-visit" class="btn">Duplicate visit</button>
+      <button id="btn-del-visit" class="btn ghost danger">Delete visit</button></div>
   </section>
 </main>
 
 <footer class="muted">SiteVisit AI — estimates are starting points from a local price bank. Verify pricing for your market.</footer>
+<script src="generate.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

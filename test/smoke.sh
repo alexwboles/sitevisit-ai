@@ -82,5 +82,34 @@ echo "$P" | grep -q 'Faucet replacement' && ok "PATCH saves generated work produ
 # 14. index page serves
 curl -s "$BASE/" | grep -q 'SiteVisit AI' && ok "index page serves" || bad "index missing"
 
+# 15. CSV export of the visit ledger
+curl -s -D /tmp/sv-hdrs.txt "$BASE/api/visits/export.csv" -o /tmp/sv-export.csv
+grep -qi 'text/csv' /tmp/sv-hdrs.txt && ok "visits CSV export content-type" || bad "CSV content-type: $(head -1 /tmp/sv-hdrs.txt)"
+head -1 /tmp/sv-export.csv | grep -q 'number.*client.*trade' && ok "visits CSV has header row" || bad "CSV header: $(head -1 /tmp/sv-export.csv)"
+grep -q "$VNUM" /tmp/sv-export.csv && ok "visits CSV includes $VNUM" || bad "CSV missing visit"
+
+# 16. duplicate visit -> new id/number, same client
+DUP=$(curl -s -X POST "$BASE/api/visits/$VID/duplicate" -H 'Content-Type: application/json')
+DID=$(echo "$DUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['visit']['id'])" 2>/dev/null)
+DNUM=$(echo "$DUP" | python3 -c "import json,sys; print(json.load(sys.stdin)['visit']['number'])" 2>/dev/null)
+[ -n "$DID" ] && [ "$DID" != "$VID" ] && [ "$DNUM" != "$VNUM" ] && ok "duplicate visit: new id + number ($DNUM)" || bad "duplicate failed: ${DUP:0:200}"
+
+# 17. delete visit
+DEL=$(curl -s -X DELETE "$BASE/api/visits/$DID")
+echo "$DEL" | grep -q '"ok":true' && ok "DELETE /api/visits/:id removes duplicate" || bad "delete failed: ${DEL:0:200}"
+curl -s "$BASE/api/visits/$DID" | grep -q 'visit not found' && ok "deleted visit is gone" || bad "deleted visit still retrievable"
+curl -s -X DELETE "$BASE/api/visits/nope" | grep -q 'visit not found' && ok "delete unknown visit 404s" || bad "delete 404 missing"
+
+# 18. quoteTotals math (node)
+node -e "
+var E=require('$DIR/public/generate.js');
+var t=E.quoteTotals([{qty:2,unitPrice:100},{qty:1,unitPrice:50}],8,10);
+if(t.subtotal!==250||t.discountAmt!==25||t.taxAmt!==18||t.total!==243) throw new Error('math '+JSON.stringify(t));
+var c=E.quoteTotals([{qty:1,unitPrice:100}],-5,150);
+if(c.taxPct!==0||c.discountPct!==100||c.total!==0) throw new Error('clamp '+JSON.stringify(c));
+var z=E.quoteTotals([],0,0);
+if(z.total!==0) throw new Error('empty');
+" && ok "quoteTotals: discount-then-tax math + clamping" || bad "quoteTotals broken"
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

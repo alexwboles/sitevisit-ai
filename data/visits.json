@@ -1,1 +1,27 @@
-[]
+[
+  {
+    "id": "muyxriiwgaby7j",
+    "number": "SV-2026-0001",
+    "client": "Jane Smith",
+    "address": "123 Main St",
+    "trade": "Plumbing",
+    "visitDate": "2026-09-28",
+    "observations": [
+      "faucet drips"
+    ],
+    "photoNotes": [],
+    "generated": {
+      "items": [
+        {
+          "description": "Faucet replacement",
+          "qty": 1,
+          "unit": "each",
+          "unitPrice": 145
+        }
+      ],
+      "punchList": [],
+      "followUps": []
+    },
+    "createdAt": "2026-10-08T02:47:21.224Z"
+  }
+]

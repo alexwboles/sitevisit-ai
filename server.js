@@ -126,6 +126,30 @@ async function handle(req, res) {
     return sendJSON(res, 200, Object.assign({ ok: true }, wp));
   }
 
+  // CSV export of the visit ledger (line-item detail stays in the app)
+  if (m === "GET" && p === "/api/visits/export.csv") {
+    const visits = readVisits();
+    const cell = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const quoteTotal = (v) => {
+      if (!v.generated || !v.generated.items) return "";
+      return v.generated.items.reduce((t, it) =>
+        t + Number(it.qty || 0) * Number(it.unitPrice || 0), 0).toFixed(2);
+    };
+    const rows = [
+      ["number", "client", "address", "trade", "visitDate", "observations", "lineItems", "quoteSubtotal", "followUpsDone", "followUpsTotal"]
+    ].concat(visits.map((v) => [
+      v.number, v.client, v.address, v.trade, v.visitDate,
+      (v.observations || []).length, ((v.generated || {}).items || []).length, quoteTotal(v),
+      ((v.generated || {}).followUps || []).filter((f) => f.done).length,
+      ((v.generated || {}).followUps || []).length
+    ]));
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="sitevisit-visits.csv"'
+    });
+    return res.end("\uFEFF" + rows.map((r) => r.map(cell).join(",")).join("\r\n"));
+  }
+
   if (p === "/api/visits") {
     if (m === "GET") {
       return sendJSON(res, 200, { visits: readVisits() });
@@ -158,12 +182,29 @@ async function handle(req, res) {
     }
   }
 
-  const vm = /^\/api\/visits\/([^/]+)$/.exec(p);
+  const vm = /^\/api\/visits\/([^/]+)(\/duplicate)?$/.exec(p);
   if (vm) {
     const id = vm[1];
     const visits = readVisits();
     const v = visits.find((x) => x.id === id);
     if (!v) return sendJSON(res, 404, { ok: false, error: "visit not found" });
+
+    // duplicate a visit (e.g. recurring maintenance at the same site)
+    if (m === "POST" && vm[2] === "/duplicate") {
+      const copy = JSON.parse(JSON.stringify(v));
+      copy.id = newId();
+      copy.number = nextNumber(visits);
+      copy.visitDate = new Date().toISOString().slice(0, 10);
+      copy.createdAt = new Date().toISOString();
+      visits.push(copy);
+      writeVisits(visits);
+      return sendJSON(res, 201, { ok: true, visit: copy });
+    }
+
+    if (m === "DELETE") {
+      writeVisits(visits.filter((x) => x.id !== id));
+      return sendJSON(res, 200, { ok: true, deleted: id });
+    }
     if (m === "GET") return sendJSON(res, 200, { visit: v });
     if (m === "PATCH") {
       const body = await readBody(req);

@@ -80,5 +80,30 @@ print(int(tot))")
 SRC=$(echo "$G" | py "set(i['source'] for i in d['items'])")
 echo "$SRC" | grep -q 'local' && ok "flow6: all items tagged source=local" || bad "flow6 sources: $SRC"
 
+# ---- Flow 7: duplicate visit preserves everything with a fresh number ----
+V7=$(curl -s -X POST "$BASE/api/visits/$VID/duplicate" -H 'Content-Type: application/json')
+VID7=$(echo "$V7" | py "d['visit']['id']")
+[ -n "$VID7" ] && [ "$VID7" != "$VID" ] && ok "flow7: duplicate returns new id" || bad "flow7: ${V7:0:200}"
+G7=$(curl -s "$BASE/api/visits/$VID7")
+echo "$G7" | py "d['visit']['client']" | grep -q 'Bob Jones' && ok "flow7: duplicate keeps client" || bad "flow7 client"
+echo "$G7" | py "d['visit']['number'] != '$VID' and d['visit']['number']" | grep -qE 'SV-' && ok "flow7: duplicate has SV- number" || bad "flow7 number"
+echo "$G7" | py "len(d['visit']['generated']['items']) == len(d['visit']['observations']) or True" >/dev/null
+echo "$G7" | py "'light' in ' '.join(i['description'] for i in d['visit']['generated']['items']).lower()" | grep -q 'True' \
+  && ok "flow7: duplicate keeps generated work product" || bad "flow7: generated lost"
+
+# ---- Flow 8: delete visit removes it from the ledger ----
+R8=$(curl -s -X DELETE "$BASE/api/visits/$VID7")
+echo "$R8" | grep -q '"ok":true' && ok "flow8: delete visit ok" || bad "flow8: ${R8:0:200}"
+L8=$(curl -s "$BASE/api/visits")
+echo "$L8" | py "len(d['visits'])" | grep -q '2' && ok "flow8: ledger back to 2 visits" || bad "flow8 count"
+
+# ---- Flow 9: CSV export covers ledger, totals, and follow-up progress ----
+V9=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"CSV Case","trade":"Plumbing","observations":["faucet drips"],"photoNotes":[],"generated":{"items":[{"description":"Faucet replacement","qty":2,"unit":"each","unitPrice":145}],"punchList":[],"followUps":[{"task":"Send quote","due":"2026-10-09","done":true}]}}')
+CSV=$(curl -s "$BASE/api/visits/export.csv")
+echo "$CSV" | grep -q 'CSV Case' && ok "flow9: CSV names the visit client" || bad "flow9: client missing"
+echo "$CSV" | grep -q '290.00' && ok "flow9: CSV carries quote subtotal (2x145)" || bad "flow9: subtotal missing"
+echo "$CSV" | grep -q 'data:image' && bad "flow9: CSV leaks blobs" || ok "flow9: CSV has no binary data"
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

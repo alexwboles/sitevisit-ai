@@ -10,6 +10,11 @@ Job walkthrough notes → quote draft + punch list + follow-ups. Log a site visi
   - **Punch list** — keyword-matched closeout tasks (re-caulk, magnet-sweep, filter check…) plus generic closeout items
   - **Follow-ups** — dated task list (send quote, order materials, schedule work…), with smart extras for permit/HOA/insurance/subcontractor keywords
 - **Saved visits** — every visit stored with its generated work product; printable summary
+- **Quote math** — editable tax % and discount % with a full subtotal → discount → tax → total breakdown on the draft and the saved report
+- **Duplicate visits** — one click re-books a visit at the same site (new number, today's date)
+- **Delete visits** — remove mistaken entries from the ledger
+- **Visit search + trade filter** — find visits by client, address, or number
+- **CSV export** — download the whole visit ledger (`GET /api/visits/export.csv`) with quote subtotals and follow-up progress
 - **Honest by design** — everything is tagged `source: "local"`; prices are starting points from a hand-written bank, not live market data
 
 ## Run it
@@ -29,6 +34,9 @@ No API keys. No network calls. Works offline on the job site.
 - `POST /api/generate` — `{trade, observations[], photoNotes[]}` → `{items, punchList, followUps, source}`
 - `GET /api/visits` / `POST /api/visits` — `{client, address, trade, visitDate, observations[], photoNotes[], generated}`
 - `GET /api/visits/:id` / `PATCH /api/visits/:id`
+- `POST /api/visits/:id/duplicate` — re-book a visit at the same site (new id + number, today's date)
+- `DELETE /api/visits/:id` — remove a visit from the ledger
+- `GET /api/visits/export.csv` — whole ledger as CSV with quote subtotals + follow-up progress
 
 ## Price bank
 

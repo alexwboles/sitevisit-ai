@@ -208,3 +208,17 @@ footer.muted { text-align: center; padding: 26px 16px 34px; font-size: 13px; }
   .topbar, .row, footer, #btn-print, #btn-print2 { display: none !important; }
   .view { animation: none; }
 }
+
+/* ---------- visit list toolbar + totals breakdown ---------- */
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 18px 0 6px; }
+.toolbar input[type="search"] { display: inline-block; width: auto; flex: 1 1 240px; padding: 10px 13px; font-size: 14.5px; font-family: inherit;
+  border: 1px solid #ddd2bd; border-radius: 0; background: #fff; color: var(--ink); }
+.toolbar select { display: inline-block; width: auto; padding: 10px 12px; font-size: 14px; font-family: inherit; border: 1px solid #ddd2bd;
+  border-radius: 0; background: #fff; color: var(--ink); }
+.toolbar .btn { flex: none; }
+.btn.danger { border-color: #b91c1c; color: #991b1b; }
+.btn.danger:hover { background: #fef2f2; border-color: #991b1b; }
+.totals-grid { margin-top: 18px; max-width: 480px; }
+.totals-breakdown { margin: 14px 0 4px; max-width: 480px; border-top: 2px solid var(--ink); padding-top: 8px; }
+.trow { display: flex; justify-content: space-between; padding: 5px 2px; font-size: 14.5px; }
+.trow.grand { font-weight: 800; font-size: 16.5px; border-top: 1px solid #ddd2bd; margin-top: 6px; padding-top: 10px; }

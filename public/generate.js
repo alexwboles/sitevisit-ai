@@ -183,6 +183,30 @@
   return {
     TRADES: TRADES,
     LINE_BANK: LINE_BANK,
-    generateWorkProduct: generateWorkProduct
+    generateWorkProduct: generateWorkProduct,
+    quoteTotals: quoteTotals
   };
+
+  /* ---------- quote totals: subtotal -> discount -> tax ----------
+   * Pure function: items [{qty, unitPrice}], taxPct >= 0, discountPct 0..100. */
+  function quoteTotals(items, taxPct, discountPct) {
+    var subtotal = 0;
+    (items || []).forEach(function (it) {
+      subtotal += Number(it.qty || 0) * Number(it.unitPrice || 0);
+    });
+    subtotal = Math.round(subtotal * 100) / 100;
+    var d = Math.min(100, Math.max(0, Number(discountPct) || 0));
+    var t = Math.max(0, Number(taxPct) || 0);
+    var discountAmt = Math.round(subtotal * (d / 100) * 100) / 100;
+    var taxable = subtotal - discountAmt;
+    var taxAmt = Math.round(taxable * (t / 100) * 100) / 100;
+    return {
+      subtotal: subtotal,
+      discountPct: d,
+      discountAmt: discountAmt,
+      taxPct: t,
+      taxAmt: taxAmt,
+      total: Math.round((taxable + taxAmt) * 100) / 100
+    };
+  }
 });
