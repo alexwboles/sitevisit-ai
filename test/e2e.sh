@@ -105,5 +105,35 @@ echo "$CSV" | grep -q 'CSV Case' && ok "flow9: CSV names the visit client" || ba
 echo "$CSV" | grep -q '290.00' && ok "flow9: CSV carries quote subtotal (2x145)" || bad "flow9: subtotal missing"
 echo "$CSV" | grep -q 'data:image' && bad "flow9: CSV leaks blobs" || ok "flow9: CSV has no binary data"
 
+# ---- Flow 10: photo attachments (stored, validated, kept out of list/CSV) ----
+TINY="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+V10=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d "{\"client\":\"Photo Case\",\"trade\":\"Plumbing\",\"observations\":[\"water stain\"],\"photoNotes\":[],\"photos\":[{\"name\":\"stain.png\",\"dataUrl\":\"$TINY\"}]}")
+VID10=$(echo "$V10" | py "d['visit']['id']")
+echo "$V10" | py "d['visit']['photos'][0]['name']" | grep -q 'stain.png' && ok "flow10: photo stored on visit" || bad "flow10: ${V10:0:200}"
+G10=$(curl -s "$BASE/api/visits/$VID10")
+echo "$G10" | py "d['visit']['photos'][0]['dataUrl'].startswith('data:image/png')" | grep -q 'True' && ok "flow10: detail returns photo data URL" || bad "flow10 detail"
+L10=$(curl -s "$BASE/api/visits")
+echo "$L10" | grep -q 'data:image' && bad "flow10: list leaks photo blobs" || ok "flow10: list strips photo blobs"
+echo "$L10" | py "max(v.get('photoCount',-1) for v in d['visits'])" | grep -q '1' && ok "flow10: list carries photoCount" || bad "flow10: no photoCount"
+CSV10=$(curl -s "$BASE/api/visits/export.csv")
+echo "$CSV10" | grep -q 'data:image' && bad "flow10: CSV leaks photos" || ok "flow10: CSV still binary-free"
+B10=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"Bad Photo","trade":"Plumbing","observations":["x"],"photoNotes":[],"photos":[{"name":"evil.txt","dataUrl":"data:text/plain;base64,aGk="}]}')
+echo "$B10" | grep -q 'not a supported image data URL' && ok "flow10: non-image data URL rejected" || bad "flow10: ${B10:0:200}"
+
+# ---- Flow 11: follow-up / punch-list check-offs persist via PATCH ----
+V11=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"Checkoff Case","trade":"HVAC","observations":["filter dirty"],"photoNotes":[],"generated":{"items":[],"punchList":[{"task":"Replace filter","done":false}],"followUps":[{"task":"Send quote","due":"2026-10-20","done":false}]}}')
+VID11=$(echo "$V11" | py "d['visit']['id']")
+P11=$(curl -s -X PATCH "$BASE/api/visits/$VID11" -H 'Content-Type: application/json' \
+  -d '{"generated":{"items":[],"punchList":[{"task":"Replace filter","done":true}],"followUps":[{"task":"Send quote","due":"2026-10-20","done":true}]}}')
+echo "$P11" | grep -q '"ok":true' && ok "flow11: PATCH generated accepted" || bad "flow11: ${P11:0:200}"
+G11=$(curl -s "$BASE/api/visits/$VID11")
+echo "$G11" | py "d['visit']['generated']['punchList'][0]['done']" | grep -q 'True' && ok "flow11: punch-list check-off persisted" || bad "flow11 punch"
+echo "$G11" | py "d['visit']['generated']['followUps'][0]['done']" | grep -q 'True' && ok "flow11: follow-up check-off persisted" || bad "flow11 follow-up"
+CSV11=$(curl -s "$BASE/api/visits/export.csv")
+echo "$CSV11" | grep -q 'Checkoff Case' && ok "flow11: visit in CSV ledger" || bad "flow11 csv"
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

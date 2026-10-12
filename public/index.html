@@ -48,6 +48,10 @@
       <p class="muted">One per line-worth — e.g. "master bath faucet drips", "caulk failing around tub".</p>
       <div id="obs-list"></div>
       <button id="btn-add-obs" class="btn ghost">+ Add observation</button>
+      <h3>Photos</h3>
+      <p class="muted">Attach real site photos — they stay on this device and ride along with the visit.</p>
+      <input id="v-photofiles" type="file" accept="image/*" multiple>
+      <div id="photo-thumbs" class="photo-thumbs"></div>
       <h3>Photo notes</h3>
       <p class="muted">Describe what each photo shows, e.g. "photo 3: water stain on ceiling".</p>
       <div id="photo-list"></div>
@@ -103,6 +107,7 @@
           <h3>Photo notes</h3><ul id="sv-photos" class="photo-tag-list"></ul>
         </div>
       </div>
+      <div id="sv-photostrip"></div>
     </div>
     <div id="sv-generated"></div>
     <div class="row"><a href="#/" class="btn ghost">Back to visits</a>

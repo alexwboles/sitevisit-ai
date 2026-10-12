@@ -4,11 +4,12 @@ Job walkthrough notes → quote draft + punch list + follow-ups. Log a site visi
 
 ## Features
 
-- **Structured visit form** — client, address, trade, date, free-text observations, photo notes ("photo 3: water stain on ceiling")
+- **Structured visit form** — client, address, trade, date, free-text observations, photo notes ("photo 3: water stain on ceiling"), plus **real photo attachments** — images are resized in the browser, stored with the visit, and shown as a thumbnail strip; blobs are stripped from list responses and CSV exports
 - **One-click work product** — keyword → line-item bank across 9 trades generates:
   - **Quote draft** — line items with quantities, units, and local price-bank rates (editable in the browser)
   - **Punch list** — keyword-matched closeout tasks (re-caulk, magnet-sweep, filter check…) plus generic closeout items
   - **Follow-ups** — dated task list (send quote, order materials, schedule work…), with smart extras for permit/HOA/insurance/subcontractor keywords
+- **Live check-offs** — punch-list and follow-up items are interactive checkboxes on the saved visit and persist immediately; overdue follow-ups are flagged, and list cards show "N overdue / N due soon" badges
 - **Saved visits** — every visit stored with its generated work product; printable summary
 - **Quote math** — editable tax % and discount % with a full subtotal → discount → tax → total breakdown on the draft and the saved report
 - **Duplicate visits** — one click re-books a visit at the same site (new number, today's date)

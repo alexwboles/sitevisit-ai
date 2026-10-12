@@ -111,5 +111,13 @@ var z=E.quoteTotals([],0,0);
 if(z.total!==0) throw new Error('empty');
 " && ok "quoteTotals: discount-then-tax math + clamping" || bad "quoteTotals broken"
 
+# new: photo upload, interactive checklists, due badges wired in UI
+grep -q 'v-photofiles' "$DIR/public/index.html" && ok "index.html has photo file input" || bad "index.html missing photo input"
+grep -q 'photoBlobs' "$DIR/public/app.js" && ok "app.js stages photo uploads" || bad "app.js missing photo staging"
+grep -q 'sv-photostrip' "$DIR/public/app.js" && ok "app.js renders photo strip" || bad "app.js missing photo strip"
+grep -q 'followUpBadges' "$DIR/public/app.js" && ok "app.js computes due/overdue badges" || bad "app.js missing followUpBadges"
+grep -q 'data-kind' "$DIR/public/app.js" && ok "app.js has persistent check-off checkboxes" || bad "app.js missing check-off persistence"
+grep -q 'OVERDUE' "$DIR/public/app.js" && ok "app.js flags overdue follow-ups" || bad "app.js missing overdue flag"
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -39,12 +39,29 @@
   /* ---------- list ---------- */
   var allVisits = [];
 
+  /* Follow-up health for a visit: overdue / due-within-7-days badges. */
+  function followUpBadges(v) {
+    var ups = ((v.generated || {}).followUps || []).filter(function (f) { return !f.done && f.due; });
+    if (!ups.length) return "";
+    var today = new Date().toISOString().slice(0, 10);
+    var soon = new Date(); soon.setDate(soon.getDate() + 7);
+    var soonStr = soon.toISOString().slice(0, 10);
+    var overdue = ups.filter(function (f) { return f.due < today; }).length;
+    var dueSoon = ups.filter(function (f) { return f.due >= today && f.due <= soonStr; }).length;
+    var out = "";
+    if (overdue) out += '<span class="exp exp-over">' + overdue + " overdue</span>";
+    if (dueSoon) out += '<span class="exp exp-soon">' + dueSoon + " due soon</span>";
+    return out;
+  }
+
   function visitCard(v) {
     return '<div class="card"><div class="ticket-no">' + esc(v.number) + '</div>' +
       '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
       '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
       esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
       '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
+      (v.photoCount ? '<span>' + v.photoCount + " photos</span>" : "<span></span>") +
+      followUpBadges(v) +
       (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
   }
 
@@ -108,6 +125,8 @@
   function renderEdit() {
     show("view-edit");
     wp = null;
+    photoBlobs = [];
+    renderPhotoThumbs();
     document.getElementById("work-product").classList.add("hidden");
     document.getElementById("edit-msg").textContent = "";
     document.getElementById("wp-tax").value = "0";
@@ -129,6 +148,48 @@
   });
   document.getElementById("btn-add-photo").addEventListener("click", function () {
     dynRow(document.getElementById("photo-list"), "photo note…");
+  });
+
+  /* ---------- photo attachments (resized client-side, stored with the visit) ---------- */
+  var photoBlobs = []; // staged {name, dataUrl} for the visit being edited
+
+  function renderPhotoThumbs() {
+    var box = document.getElementById("photo-thumbs");
+    box.innerHTML = "";
+    photoBlobs.forEach(function (p, i) {
+      var fig = document.createElement("figure");
+      fig.className = "photo-thumb";
+      var img = document.createElement("img");
+      img.src = p.dataUrl; img.alt = p.name;
+      var cap = document.createElement("figcaption");
+      cap.textContent = p.name.length > 18 ? p.name.slice(0, 16) + "…" : p.name;
+      var rm = document.createElement("button");
+      rm.type = "button"; rm.className = "btn ghost"; rm.textContent = "✕";
+      rm.addEventListener("click", function () { photoBlobs.splice(i, 1); renderPhotoThumbs(); });
+      fig.appendChild(img); fig.appendChild(cap); fig.appendChild(rm);
+      box.appendChild(fig);
+    });
+  }
+
+  function stagePhoto(file) {
+    if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
+    var img = new Image();
+    img.onload = function () {
+      var max = 900, scale = Math.min(1, max / Math.max(img.width, img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      photoBlobs.push({ name: file.name || "photo", dataUrl: c.toDataURL("image/jpeg", 0.75) });
+      renderPhotoThumbs();
+    };
+    img.src = URL.createObjectURL(file);
+  }
+
+  document.getElementById("v-photofiles").addEventListener("change", function (e) {
+    Array.prototype.forEach.call(e.target.files || [], stagePhoto);
+    e.target.value = "";
   });
 
   function readTaxDiscount() {
@@ -240,6 +301,7 @@
         visitDate: document.getElementById("v-date").value,
         observations: readRows(document.getElementById("obs-list")),
         photoNotes: readRows(document.getElementById("photo-list")),
+        photos: photoBlobs,
         generated: wp
       }
     }).then(function (j) { location.hash = "#/visit/" + j.visit.id; })
@@ -250,10 +312,78 @@
   document.getElementById("btn-print2").addEventListener("click", function () { window.print(); });
 
   /* ---------- detail ---------- */
+  var currentVisit = null;
+
+  function isOverdue(f) {
+    if (f.done || !f.due) return false;
+    return f.due < new Date().toISOString().slice(0, 10);
+  }
+
+  function renderGenerated(v) {
+    var g = document.getElementById("sv-generated");
+    if (!v.generated) {
+      g.innerHTML = '<p class="muted">No work product generated for this visit yet.</p>';
+      return;
+    }
+    var st = v.generated.totals || { subtotal: 0, discountPct: 0, discountAmt: 0, taxPct: 0, taxAmt: 0, total: 0 };
+    // recompute so old visits (saved before tax/discount existed) still add up
+    if (window.SiteVisitEngine) {
+      st = window.SiteVisitEngine.quoteTotals(v.generated.items, st.taxPct || 0, st.discountPct || 0);
+    }
+    g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
+      '<span class="quote-total">' + money(st.total) + "</span></div>" +
+      '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
+      v.generated.items.map(function (it) {
+        return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
+          esc(it.unit) + "</td><td>" + money(it.unitPrice) + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      '<div class="totals-breakdown">' +
+      '<div class="trow"><span>Subtotal</span><span>' + money(st.subtotal) + "</span></div>" +
+      (st.discountAmt ? '<div class="trow"><span>Discount (' + st.discountPct + '%)</span><span>−' + money(st.discountAmt) + "</span></div>" : "") +
+      (st.taxAmt ? '<div class="trow"><span>Tax (' + st.taxPct + '%)</span><span>' + money(st.taxAmt) + "</span></div>" : "") +
+      '<div class="trow grand"><span>Total</span><span>' + money(st.total) + "</span></div></div>" +
+      "<h3>Punch list <span class='muted' id='sv-punch-saved'></span></h3><ul class='checklist'>" +
+      v.generated.punchList.map(function (p, i) {
+        return '<li class="' + (p.done ? "done" : "") + '"><label><input type="checkbox" data-kind="punch" data-i="' + i + '"' +
+          (p.done ? " checked" : "") + "> <span>" + esc(p.task) + "</span></label></li>";
+      }).join("") + "</ul><h3>Follow-ups <span class='muted' id='sv-follow-saved'></span></h3><ul class='checklist'>" +
+      v.generated.followUps.map(function (f, i) {
+        var od = isOverdue(f);
+        return '<li class="' + (f.done ? "done" : od ? "overdue" : "") + '"><label><input type="checkbox" data-kind="follow" data-i="' + i + '"' +
+          (f.done ? " checked" : "") + "> <span>" + esc(f.task) +
+          ' <span class="muted">— due ' + esc(f.due) + (od ? ' <strong class="od-tag">OVERDUE</strong>' : "") + "</span></span></label></li>";
+      }).join("") + "</ul></div>";
+    // persist check-offs live
+    g.querySelectorAll("input[data-kind]").forEach(function (c) {
+      c.addEventListener("change", function () {
+        var kind = c.getAttribute("data-kind"), i = Number(c.getAttribute("data-i"));
+        var item = kind === "punch" ? v.generated.punchList[i] : v.generated.followUps[i];
+        item.done = c.checked;
+        var li = c.closest("li");
+        li.classList.toggle("done", c.checked);
+        if (kind === "follow") {
+          li.classList.toggle("overdue", !c.checked && isOverdue(item));
+          li.querySelector(".od-tag") && li.querySelector(".od-tag").remove();
+          if (!c.checked && isOverdue(item)) {
+            var tag = document.createElement("strong");
+            tag.className = "od-tag"; tag.textContent = "OVERDUE";
+            li.querySelector(".muted").appendChild(document.createTextNode(" "));
+            li.querySelector(".muted").appendChild(tag);
+          }
+        }
+        var saved = document.getElementById(kind === "punch" ? "sv-punch-saved" : "sv-follow-saved");
+        api("/api/visits/" + v.id, { method: "PATCH", body: { generated: v.generated } })
+          .then(function () { if (saved) saved.textContent = "· saved"; })
+          .catch(function () { if (saved) saved.textContent = "· save failed"; });
+      });
+    });
+  }
+
   function renderVisit(id) {
     show("view-doc");
     api("/api/visits/" + id).then(function (j) {
       var v = j.visit;
+      currentVisit = v;
       document.getElementById("sv-title").textContent = v.client;
       document.getElementById("sv-num").textContent = v.number;
       document.getElementById("sv-meta").textContent =
@@ -262,36 +392,24 @@
         v.observations.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") || "<li class='muted'>none</li>";
       document.getElementById("sv-photos").innerHTML =
         v.photoNotes.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") || "<li class='muted'>none</li>";
-      var g = document.getElementById("sv-generated");
-      if (!v.generated) {
-        g.innerHTML = '<p class="muted">No work product generated for this visit yet.</p>';
+      var strip = document.getElementById("sv-photostrip");
+      if (v.photos && v.photos.length) {
+        strip.innerHTML = "<h3>Site photos</h3>";
+        var row = document.createElement("div");
+        row.className = "photo-thumbs";
+        v.photos.forEach(function (p) {
+          var a = document.createElement("a");
+          a.href = p.dataUrl; a.target = "_blank"; a.rel = "noopener";
+          a.className = "photo-thumb-link";
+          var img = document.createElement("img");
+          img.src = p.dataUrl; img.alt = p.name; img.title = p.name;
+          a.appendChild(img); row.appendChild(a);
+        });
+        strip.appendChild(row);
       } else {
-        var st = v.generated.totals || { subtotal: 0, discountPct: 0, discountAmt: 0, taxPct: 0, taxAmt: 0, total: 0 };
-        // recompute so old visits (saved before tax/discount existed) still add up
-        if (window.SiteVisitEngine) {
-          st = window.SiteVisitEngine.quoteTotals(v.generated.items, st.taxPct || 0, st.discountPct || 0);
-        }
-        g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
-          '<span class="quote-total">' + money(st.total) + "</span></div>" +
-          '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
-          v.generated.items.map(function (it) {
-            return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
-              esc(it.unit) + "</td><td>" + money(it.unitPrice) + "</td></tr>";
-          }).join("") + "</tbody></table></div>" +
-          '<div class="totals-breakdown">' +
-          '<div class="trow"><span>Subtotal</span><span>' + money(st.subtotal) + "</span></div>" +
-          (st.discountAmt ? '<div class="trow"><span>Discount (' + st.discountPct + '%)</span><span>−' + money(st.discountAmt) + "</span></div>" : "") +
-          (st.taxAmt ? '<div class="trow"><span>Tax (' + st.taxPct + '%)</span><span>' + money(st.taxAmt) + "</span></div>" : "") +
-          '<div class="trow grand"><span>Total</span><span>' + money(st.total) + "</span></div></div>" +
-          "<h3>Punch list</h3><ul class='checklist'>" +
-          v.generated.punchList.map(function (p) {
-            return "<li>" + (p.done ? "☑" : "☐") + " " + esc(p.task) + "</li>";
-          }).join("") + "</ul><h3>Follow-ups</h3><ul class='checklist'>" +
-          v.generated.followUps.map(function (f) {
-            return "<li>" + (f.done ? "☑" : "☐") + " " + esc(f.task) +
-              ' <span class="muted">— due ' + esc(f.due) + "</span></li>";
-          }).join("") + "</ul></div>";
+        strip.innerHTML = "";
       }
+      renderGenerated(v);
       document.getElementById("btn-dup-visit").onclick = function () {
         api("/api/visits/" + id + "/duplicate", { method: "POST" })
           .then(function (r) { location.hash = "#/visit/" + r.visit.id; })

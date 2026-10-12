@@ -107,6 +107,35 @@ function cleanList(x) {
   return x.map((s) => String(s || "").trim()).filter(Boolean);
 }
 
+/* Validate uploaded visit photos. Each must be a small data-URL image
+ * (png/jpeg/gif/webp), <= 1.5MB, max 12 per visit. Returns {ok, photos, error}. */
+function cleanPhotos(x) {
+  if (x === undefined || x === null) return { ok: true, photos: [] };
+  if (!Array.isArray(x)) return { ok: false, error: "photos must be an array" };
+  if (x.length > 12) return { ok: false, error: "at most 12 photos per visit" };
+  const photos = [];
+  for (const p of x) {
+    const name = String((p && p.name) || "photo").trim().slice(0, 80) || "photo";
+    const dataUrl = String((p && p.dataUrl) || "");
+    if (!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
+      return { ok: false, error: "photo '" + name + "' is not a supported image data URL" };
+    }
+    if (dataUrl.length > 2000000) {
+      return { ok: false, error: "photo '" + name + "' exceeds the 1.5MB limit" };
+    }
+    photos.push({ name, dataUrl, addedAt: new Date().toISOString() });
+  }
+  return { ok: true, photos };
+}
+
+/* Strip photo blobs from a visit for list responses (bandwidth + privacy). */
+function visitSummary(v) {
+  const c = Object.assign({}, v);
+  c.photoCount = (v.photos || []).length;
+  delete c.photos;
+  return c;
+}
+
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
   const p = url.pathname;
@@ -152,7 +181,7 @@ async function handle(req, res) {
 
   if (p === "/api/visits") {
     if (m === "GET") {
-      return sendJSON(res, 200, { visits: readVisits() });
+      return sendJSON(res, 200, { visits: readVisits().map(visitSummary) });
     }
     if (m === "POST") {
       const body = await readBody(req);
@@ -163,6 +192,8 @@ async function handle(req, res) {
       if (!Engine.TRADES.includes(trade)) {
         return sendJSON(res, 400, { ok: false, error: "unknown trade: " + trade });
       }
+      const ph = cleanPhotos(body.photos);
+      if (!ph.ok) return sendJSON(res, 400, { ok: false, error: ph.error });
       const visits = readVisits();
       const v = {
         id: newId(),
@@ -173,6 +204,7 @@ async function handle(req, res) {
         visitDate: body.visitDate || new Date().toISOString().slice(0, 10),
         observations: cleanList(body.observations),
         photoNotes: cleanList(body.photoNotes),
+        photos: ph.photos,
         generated: body.generated || null,
         createdAt: new Date().toISOString()
       };
@@ -211,6 +243,11 @@ async function handle(req, res) {
       if (body.observations !== undefined) v.observations = cleanList(body.observations);
       if (body.photoNotes !== undefined) v.photoNotes = cleanList(body.photoNotes);
       if (body.generated !== undefined) v.generated = body.generated;
+      if (body.photos !== undefined) {
+        const ph = cleanPhotos(body.photos);
+        if (!ph.ok) return sendJSON(res, 400, { ok: false, error: ph.error });
+        v.photos = ph.photos;
+      }
       if (body.client !== undefined && String(body.client).trim()) v.client = String(body.client).trim();
       if (body.address !== undefined) v.address = String(body.address).trim();
       writeVisits(visits);
