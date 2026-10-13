@@ -117,15 +117,33 @@
   }
 
   function visitCard(v) {
-    return '<div class="card"><div class="ticket-no">' + esc(v.number) + "</div>" +
+    var cover = v.coverPhoto
+      ? '<a class="jobcover" href="#/visit/' + v.id + '"><img src="' + v.coverPhoto + '" alt="Site photo — ' + esc(v.client) + '" loading="lazy">' +
+        (v.photoCount > 1 ? '<span class="cover-count">' + v.photoCount + " photos</span>" : "") + "</a>"
+      : '<a class="jobcover nocover" href="#/visit/' + v.id + '"><span>No photos yet</span></a>';
+    return '<div class="card jobcard">' + cover +
+      '<div class="ticket-no">' + esc(v.number) + "</div>" +
       '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
       '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
       esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
       '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
-      (v.photoCount ? '<span>' + v.photoCount + " photos</span>" : "<span></span>") +
       statusPill(v) +
       followUpBadges(v) +
       (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
+  }
+
+  function renderPhotoFeed() {
+    var wrap = document.getElementById("photo-feed-wrap");
+    api("/api/photos/recent?limit=12").then(function (j) {
+      var photos = (j && j.photos) || [];
+      if (!photos.length) { wrap.classList.add("hidden"); return; }
+      wrap.classList.remove("hidden");
+      document.getElementById("photo-feed").innerHTML = photos.map(function (p) {
+        return '<a class="feed-item" href="#/visit/' + p.visitId + '" title="' + esc(p.client) + " — " + esc(p.name) + '">' +
+          '<img src="' + p.dataUrl + '" alt="' + esc(p.name) + '" loading="lazy">' +
+          '<span class="feed-cap"><strong>' + esc(p.client) + "</strong>" + esc(p.name) + "</span></a>";
+      }).join("");
+    }).catch(function () { wrap.classList.add("hidden"); });
   }
 
   function applyVisitFilter() {
@@ -164,6 +182,7 @@
     api("/api/visits").then(function (j) {
       allVisits = j.visits;
       applyVisitFilter();
+      renderPhotoFeed();
     }).catch(function (e) {
       document.getElementById("visit-list").innerHTML = '<p class="muted">Error: ' + esc(e.message) + "</p>";
     });
@@ -538,18 +557,23 @@
         v.photoNotes.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") || "<li class='muted'>none</li>";
       var strip = document.getElementById("sv-photostrip");
       if (v.photos && v.photos.length) {
-        strip.innerHTML = "<h3>Site photos</h3>";
-        var row = document.createElement("div");
-        row.className = "photo-thumbs";
+        strip.innerHTML = "<h3>Site photos <span class='count'>" + v.photos.length + "</span></h3>";
+        var gal = document.createElement("div");
+        gal.className = "photo-gallery";
         v.photos.forEach(function (p) {
+          var fig = document.createElement("figure");
+          fig.className = "gal-item";
           var a = document.createElement("a");
           a.href = p.dataUrl; a.target = "_blank"; a.rel = "noopener";
-          a.className = "photo-thumb-link";
           var img = document.createElement("img");
-          img.src = p.dataUrl; img.alt = p.name; img.title = p.name;
-          a.appendChild(img); row.appendChild(a);
+          img.src = p.dataUrl; img.alt = p.name; img.loading = "lazy";
+          a.appendChild(img);
+          var cap = document.createElement("figcaption");
+          cap.textContent = p.name + " · " + (p.addedAt || "").slice(0, 10);
+          fig.appendChild(a); fig.appendChild(cap);
+          gal.appendChild(fig);
         });
-        strip.appendChild(row);
+        strip.appendChild(gal);
       } else {
         strip.innerHTML = "";
       }

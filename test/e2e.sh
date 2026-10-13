@@ -114,8 +114,14 @@ echo "$V10" | py "d['visit']['photos'][0]['name']" | grep -q 'stain.png' && ok "
 G10=$(curl -s "$BASE/api/visits/$VID10")
 echo "$G10" | py "d['visit']['photos'][0]['dataUrl'].startswith('data:image/png')" | grep -q 'True' && ok "flow10: detail returns photo data URL" || bad "flow10 detail"
 L10=$(curl -s "$BASE/api/visits")
-echo "$L10" | grep -q 'data:image' && bad "flow10: list leaks photo blobs" || ok "flow10: list strips photo blobs"
+echo "$L10" | py "any('photos' in v for v in d['visits'])" | grep -q 'True' && bad "flow10: list leaks photo blobs" || ok "flow10: list strips photo blob arrays"
 echo "$L10" | py "max(v.get('photoCount',-1) for v in d['visits'])" | grep -q '1' && ok "flow10: list carries photoCount" || bad "flow10: no photoCount"
+echo "$L10" | py "any((v.get('coverPhoto') or '').startswith('data:image') for v in d['visits'])" | grep -q 'True' && ok "flow10: list carries one coverPhoto per visit" || bad "flow10: no coverPhoto"
+# ---- Flow 10b: photo feed endpoint ----
+F10B=$(curl -s "$BASE/api/photos/recent?limit=5")
+echo "$F10B" | py "d['ok']" | grep -q 'True' && ok "flow10b: /api/photos/recent ok" || bad "flow10b: ${F10B:0:200}"
+echo "$F10B" | py "len(d['photos'])>=1 and d['photos'][0]['dataUrl'].startswith('data:image')" | grep -q 'True' && ok "flow10b: feed returns photo data URLs" || bad "flow10b: no photos"
+echo "$F10B" | py "all('visitId' in p and 'client' in p for p in d['photos'])" | grep -q 'True' && ok "flow10b: feed items carry visit context" || bad "flow10b: missing context"
 CSV10=$(curl -s "$BASE/api/visits/export.csv")
 echo "$CSV10" | grep -q 'data:image' && bad "flow10: CSV leaks photos" || ok "flow10: CSV still binary-free"
 B10=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \

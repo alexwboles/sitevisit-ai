@@ -139,10 +139,14 @@ function cleanPhotos(x) {
   return { ok: true, photos };
 }
 
-/* Strip photo blobs from a visit for list responses (bandwidth + privacy). */
+/* Strip photo blobs from a visit for list responses (bandwidth + privacy),
+ * but keep the first photo as a card cover (already resized in-browser). */
 function visitSummary(v) {
   const c = Object.assign({}, v);
   c.photoCount = (v.photos || []).length;
+  if (v.photos && v.photos[0] && v.photos[0].dataUrl) {
+    c.coverPhoto = v.photos[0].dataUrl;
+  }
   delete c.photos;
   return c;
 }
@@ -194,11 +198,28 @@ async function handle(req, res) {
     return res.end("\uFEFF" + rows.map((r) => r.map(cell).join(",")).join("\r\n"));
   }
 
+  /* CompanyCam-style live photo feed: most recent site photos across
+   * all visits, newest first. Capped for local bandwidth. */
+  if (m === "GET" && p === "/api/photos/recent") {
+    var limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit"), 10) || 12));
+    var feed = [];
+    readVisits().forEach(function (v) {
+      (v.photos || []).forEach(function (ph) {
+        feed.push({
+          visitId: v.id, client: v.client, address: v.address || "",
+          visitDate: v.visitDate, name: ph.name, addedAt: ph.addedAt,
+          dataUrl: ph.dataUrl
+        });
+      });
+    });
+    feed.sort(function (a, b) { return (b.addedAt || "").localeCompare(a.addedAt || ""); });
+    return sendJSON(res, 200, { ok: true, photos: feed.slice(0, limit) });
+  }
+
   if (p === "/api/visits") {
     if (m === "GET") {
       return sendJSON(res, 200, { visits: readVisits().map(visitSummary) });
-    }
-    if (m === "POST") {
+    }    if (m === "POST") {
       const body = await readBody(req);
       if (!String(body.client || "").trim()) {
         return sendJSON(res, 400, { ok: false, error: "client name required" });
