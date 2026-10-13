@@ -100,6 +100,15 @@ echo "$DEL" | grep -q '"ok":true' && ok "DELETE /api/visits/:id removes duplicat
 curl -s "$BASE/api/visits/$DID" | grep -q 'visit not found' && ok "deleted visit is gone" || bad "deleted visit still retrievable"
 curl -s -X DELETE "$BASE/api/visits/nope" | grep -q 'visit not found' && ok "delete unknown visit 404s" || bad "delete 404 missing"
 
+# 17b. quote status pipeline: default draft, valid transitions, invalid rejected
+echo "$V" | grep -q '"status":"draft"' && ok "new visit defaults to draft status" || bad "status default: ${V:0:200}"
+curl -s "$BASE/api/statuses" | grep -q '"paid"' && ok "GET /api/statuses lists pipeline" || bad "statuses endpoint"
+PST=$(curl -s -X PATCH "$BASE/api/visits/$VID" -H 'Content-Type: application/json' -d '{"status":"approved"}')
+echo "$PST" | grep -q '"status":"approved"' && ok "PATCH status -> approved" || bad "status patch: ${PST:0:200}"
+PBAD=$(curl -s -X PATCH "$BASE/api/visits/$VID" -H 'Content-Type: application/json' -d '{"status":"teleported"}')
+echo "$PBAD" | grep -q 'unknown status' && ok "PATCH rejects unknown status" || bad "status validation: ${PBAD:0:200}"
+curl -s "$BASE/api/visits/export.csv" | grep -q 'approved' && ok "CSV carries quote status" || bad "CSV missing status"
+
 # 18. quoteTotals math (node)
 node -e "
 var E=require('$DIR/public/generate.js');
@@ -118,6 +127,15 @@ grep -q 'sv-photostrip' "$DIR/public/app.js" && ok "app.js renders photo strip" 
 grep -q 'followUpBadges' "$DIR/public/app.js" && ok "app.js computes due/overdue badges" || bad "app.js missing followUpBadges"
 grep -q 'data-kind' "$DIR/public/app.js" && ok "app.js has persistent check-off checkboxes" || bad "app.js missing check-off persistence"
 grep -q 'OVERDUE' "$DIR/public/app.js" && ok "app.js flags overdue follow-ups" || bad "app.js missing overdue flag"
+
+# new: quote status pipeline + follow-up management + client message wired in UI
+grep -q 'visit-status-filter' "$DIR/public/index.html" && ok "index.html has status filter" || bad "index.html missing status filter"
+grep -q 'sv-status' "$DIR/public/app.js" && ok "app.js has quote status selector" || bad "app.js missing status selector"
+grep -q 'st-paid' "$DIR/public/style.css" && ok "style.css has status pill styles" || bad "style.css missing status styles"
+grep -q 'sv-add-follow' "$DIR/public/app.js" && ok "app.js can add follow-ups on saved visits" || bad "app.js missing add-follow-up"
+grep -q 'data-due' "$DIR/public/app.js" && ok "app.js edits follow-up due dates" || bad "app.js missing due-date editing"
+grep -q 'data-rm-follow' "$DIR/public/app.js" && ok "app.js can remove follow-ups" || bad "app.js missing follow-up removal"
+grep -q 'buildClientMessage' "$DIR/public/app.js" && ok "app.js builds copy-ready client quote message" || bad "app.js missing client message"
 
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

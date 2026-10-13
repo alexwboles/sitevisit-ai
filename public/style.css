@@ -241,3 +241,20 @@ footer.muted { text-align: center; padding: 26px 16px 34px; font-size: 13px; }
 .totals-breakdown { margin: 14px 0 4px; max-width: 480px; border-top: 2px solid var(--ink); padding-top: 8px; }
 .trow { display: flex; justify-content: space-between; padding: 5px 2px; font-size: 14.5px; }
 .trow.grand { font-weight: 800; font-size: 16.5px; border-top: 1px solid #ddd2bd; margin-top: 6px; padding-top: 10px; }
+
+/* ---------- quote status pipeline ---------- */
+.status { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border: 1px solid #d6cbb2; background: #f5f1e6; color: #57534e; }
+.status.st-sent { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.status.st-approved { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.status.st-scheduled { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.status.st-invoiced { background: #fdf2f8; border-color: #f9a8d4; color: #9d174d; }
+.status.st-paid { background: #111827; border-color: #111827; color: #fff; }
+.status-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.status-row select { padding: 7px 10px; font-size: 14px; font-family: inherit; border: 1px solid #ddd2bd; border-radius: 0; background: #fff; }
+.add-follow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.add-follow input[type="text"] { flex: 1 1 260px; padding: 8px 10px; font-size: 14px; font-family: inherit; border: 1px solid #ddd2bd; border-radius: 0; background: #fff; }
+.add-follow input[type="date"] { padding: 8px 10px; font-size: 14px; font-family: inherit; border: 1px solid #ddd2bd; border-radius: 0; background: #fff; }
+.due-edit { padding: 3px 6px; font-size: 12.5px; font-family: inherit; border: 1px solid #ddd2bd; border-radius: 0; background: #fff; margin-left: 6px; }
+.quote-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.quote-head #btn-copy-msg { margin-left: auto; }

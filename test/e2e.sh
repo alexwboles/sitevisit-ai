@@ -135,5 +135,37 @@ echo "$G11" | py "d['visit']['generated']['followUps'][0]['done']" | grep -q 'Tr
 CSV11=$(curl -s "$BASE/api/visits/export.csv")
 echo "$CSV11" | grep -q 'Checkoff Case' && ok "flow11: visit in CSV ledger" || bad "flow11 csv"
 
+# ---- Flow 12: quote status pipeline end-to-end ----
+V12=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"Status Case","trade":"Carpentry","observations":["deck boards rotten"],"photoNotes":[]}')
+VID12=$(echo "$V12" | py "d['visit']['id']")
+echo "$V12" | py "d['visit']['status']" | grep -q 'draft' && ok "flow12: new visit starts as draft" || bad "flow12 default: ${V12:0:200}"
+for ST in sent approved scheduled invoiced paid; do
+  P12=$(curl -s -X PATCH "$BASE/api/visits/$VID12" -H 'Content-Type: application/json' -d "{\"status\":\"$ST\"}")
+  echo "$P12" | py "d['visit']['status']" | grep -q "$ST" || { bad "flow12: status -> $ST failed: ${P12:0:150}"; break; }
+done
+echo "$P12" | py "d['visit']['status']" | grep -q 'paid' && ok "flow12: status walks draft->paid" || bad "flow12 walk"
+G12=$(curl -s "$BASE/api/visits/$VID12")
+echo "$G12" | py "d['visit']['status']" | grep -q 'paid' && ok "flow12: paid status persists" || bad "flow12 persist"
+D12=$(curl -s -X POST "$BASE/api/visits/$VID12/duplicate" -H 'Content-Type: application/json')
+echo "$D12" | py "d['visit']['status']" | grep -q 'draft' && ok "flow12: duplicate resets status to draft" || bad "flow12 dup status: ${D12:0:150}"
+CSV12=$(curl -s "$BASE/api/visits/export.csv")
+echo "$CSV12" | grep -q 'Status Case.*paid\|paid' && ok "flow12: CSV ledger carries status" || bad "flow12 csv status"
+
+# ---- Flow 13: follow-up add / due-date edit / remove via PATCH ----
+V13=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"Followup Case","trade":"HVAC","observations":["old furnace"],"photoNotes":[],"generated":{"items":[],"punchList":[],"followUps":[{"task":"Send quote","due":"2026-11-01","done":false}]}}')
+VID13=$(echo "$V13" | py "d['visit']['id']")
+# add a follow-up + change the existing due date in one PATCH (what the UI does)
+P13=$(curl -s -X PATCH "$BASE/api/visits/$VID13" -H 'Content-Type: application/json' \
+  -d '{"generated":{"items":[],"punchList":[],"followUps":[{"task":"Send quote","due":"2026-11-15","done":false},{"task":"Order filter","due":"2026-11-05","done":false}]}}')
+echo "$P13" | py "len(d['visit']['generated']['followUps'])" | grep -q '2' && ok "flow13: added second follow-up via PATCH" || bad "flow13 add: ${P13:0:200}"
+G13=$(curl -s "$BASE/api/visits/$VID13")
+echo "$G13" | py "d['visit']['generated']['followUps'][0]['due']" | grep -q '2026-11-15' && ok "flow13: due-date edit persisted" || bad "flow13 due"
+# remove one follow-up
+P13B=$(curl -s -X PATCH "$BASE/api/visits/$VID13" -H 'Content-Type: application/json' \
+  -d '{"generated":{"items":[],"punchList":[],"followUps":[{"task":"Order filter","due":"2026-11-05","done":false}]}}')
+echo "$P13B" | py "len(d['visit']['generated']['followUps'])" | grep -q '1' && ok "flow13: follow-up removal persisted" || bad "flow13 remove"
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

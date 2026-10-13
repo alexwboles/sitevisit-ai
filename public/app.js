@@ -4,6 +4,31 @@
 
   var TRADES = ["Plumbing","Electrical","Painting","HVAC","Roofing","Landscaping","Carpentry","Flooring","General Handyman"];
 
+  /* Quote pipeline — mirrors QUOTE_STATUSES in server.js. */
+  var STATUSES = [
+    { id: "draft", label: "Draft" },
+    { id: "sent", label: "Sent" },
+    { id: "approved", label: "Approved" },
+    { id: "scheduled", label: "Scheduled" },
+    { id: "invoiced", label: "Invoiced" },
+    { id: "paid", label: "Paid" }
+  ];
+
+  function statusOf(v) {
+    var s = (v && v.status) || "draft";
+    return STATUSES.some(function (x) { return x.id === s; }) ? s : "draft";
+  }
+
+  function statusLabel(id) {
+    var hit = STATUSES.filter(function (x) { return x.id === id; })[0];
+    return hit ? hit.label : id;
+  }
+
+  function statusPill(v) {
+    var s = statusOf(v);
+    return '<span class="status st-' + s + '">' + esc(statusLabel(s)) + "</span>";
+  }
+
   function api(path, opts) {
     opts = opts || {};
     return fetch(path, {
@@ -36,6 +61,43 @@
     return "$" + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
+  /* Build a ready-to-send client message for a quote draft. */
+  function buildClientMessage(v, st) {
+    var lines = ["Hi " + v.client + " — here's your quote from my visit on " + v.visitDate +
+      " (" + v.number + "):", ""];
+    (v.generated.items || []).forEach(function (it) {
+      lines.push(it.qty + "× " + it.description + " — " + money(Number(it.qty || 0) * Number(it.unitPrice || 0)));
+    });
+    lines.push("");
+    lines.push("Subtotal: " + money(st.subtotal));
+    if (st.discountAmt) lines.push("Discount (" + st.discountPct + "%): −" + money(st.discountAmt));
+    if (st.taxAmt) lines.push("Tax (" + st.taxPct + "%): " + money(st.taxAmt));
+    lines.push("Total: " + money(st.total));
+    lines.push("");
+    lines.push("Reply to this message if you'd like to move ahead — I can get you scheduled this week.");
+    return lines.join("\n");
+  }
+
+  function copyClientMessage(v, st) {
+    var text = buildClientMessage(v, st);
+    function done() { return true; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); });
+      return done();
+    }
+    fallbackCopy(text);
+    return done();
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* manual copy */ }
+    ta.remove();
+  }
+
   /* ---------- list ---------- */
   var allVisits = [];
 
@@ -55,12 +117,13 @@
   }
 
   function visitCard(v) {
-    return '<div class="card"><div class="ticket-no">' + esc(v.number) + '</div>' +
+    return '<div class="card"><div class="ticket-no">' + esc(v.number) + "</div>" +
       '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
       '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
       esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
       '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
       (v.photoCount ? '<span>' + v.photoCount + " photos</span>" : "<span></span>") +
+      statusPill(v) +
       followUpBadges(v) +
       (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
   }
@@ -68,8 +131,10 @@
   function applyVisitFilter() {
     var q = document.getElementById("visit-search").value.trim().toLowerCase();
     var tr = document.getElementById("visit-trade-filter").value;
+    var st = document.getElementById("visit-status-filter").value;
     var list = allVisits.filter(function (v) {
       if (tr && v.trade !== tr) return false;
+      if (st && statusOf(v) !== st) return false;
       if (!q) return true;
       var hay = (v.client + " " + v.number + " " + (v.address || "") + " " + v.trade).toLowerCase();
       return hay.indexOf(q) !== -1;
@@ -91,6 +156,11 @@
       sel.innerHTML = '<option value="">All trades</option>' +
         TRADES.map(function (t) { return "<option>" + t + "</option>"; }).join("");
     }
+    var ssel = document.getElementById("visit-status-filter");
+    if (!ssel.options.length) {
+      ssel.innerHTML = '<option value="">All statuses</option>' +
+        STATUSES.map(function (s) { return '<option value="' + s.id + '">' + s.label + "</option>"; }).join("");
+    }
     api("/api/visits").then(function (j) {
       allVisits = j.visits;
       applyVisitFilter();
@@ -101,6 +171,7 @@
 
   document.getElementById("visit-search").addEventListener("input", applyVisitFilter);
   document.getElementById("visit-trade-filter").addEventListener("change", applyVisitFilter);
+  document.getElementById("visit-status-filter").addEventListener("change", applyVisitFilter);
 
   /* ---------- editor ---------- */
   var wp = null; // current generated work product (editable)
@@ -332,6 +403,10 @@
     }
     g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
       '<span class="quote-total">' + money(st.total) + "</span></div>" +
+      '<div class="status-row"><label>Quote status <select id="sv-status" aria-label="Quote status">' +
+      STATUSES.map(function (s) {
+        return '<option value="' + s.id + '"' + (statusOf(v) === s.id ? " selected" : "") + ">" + s.label + "</option>";
+      }).join("") + '</select></label> <span class="muted small" id="sv-status-saved"></span></div>' +
       '<div class="table-scroll"><table class="items"><thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit $</th></tr></thead><tbody>' +
       v.generated.items.map(function (it) {
         return "<tr><td>" + esc(it.description) + "</td><td>" + esc(it.qty) + "</td><td>" +
@@ -351,8 +426,19 @@
         var od = isOverdue(f);
         return '<li class="' + (f.done ? "done" : od ? "overdue" : "") + '"><label><input type="checkbox" data-kind="follow" data-i="' + i + '"' +
           (f.done ? " checked" : "") + "> <span>" + esc(f.task) +
-          ' <span class="muted">— due ' + esc(f.due) + (od ? ' <strong class="od-tag">OVERDUE</strong>' : "") + "</span></span></label></li>";
-      }).join("") + "</ul></div>";
+          ' <span class="muted">— due ' + esc(f.due) + (od ? ' <strong class="od-tag">OVERDUE</strong>' : "") + "</span></span></label>" +
+          ' <input type="date" class="due-edit" data-due="' + i + '" value="' + esc(f.due || "") + '" aria-label="Due date for ' + esc(f.task) + '"' + (f.done ? " disabled" : "") + ">" +
+          ' <button class="btn ghost small" data-rm-follow="' + i + '" aria-label="Remove follow-up">✕</button></li>';
+      }).join("") + "</ul>" +
+      '<div class="add-follow"><input id="sv-new-follow-task" type="text" placeholder="New follow-up, e.g. Call HOA for approval" aria-label="New follow-up task">' +
+      ' <input id="sv-new-follow-due" type="date" aria-label="Due date">' +
+      ' <button id="sv-add-follow" class="btn small">+ Add follow-up</button></div></div>';
+    // persist helper shared by every bookkeeping change below
+    function persistGenerated(done) {
+      api("/api/visits/" + v.id, { method: "PATCH", body: { generated: v.generated } })
+        .then(function () { done && done("saved"); })
+        .catch(function () { done && done("save failed"); });
+    }
     // persist check-offs live
     g.querySelectorAll("input[data-kind]").forEach(function (c) {
       c.addEventListener("change", function () {
@@ -370,13 +456,71 @@
             li.querySelector(".muted").appendChild(document.createTextNode(" "));
             li.querySelector(".muted").appendChild(tag);
           }
+          var dueInput = li.querySelector("[data-due]");
+          if (dueInput) dueInput.disabled = c.checked;
         }
         var saved = document.getElementById(kind === "punch" ? "sv-punch-saved" : "sv-follow-saved");
-        api("/api/visits/" + v.id, { method: "PATCH", body: { generated: v.generated } })
-          .then(function () { if (saved) saved.textContent = "· saved"; })
-          .catch(function () { if (saved) saved.textContent = "· save failed"; });
+        persistGenerated(function (msg) { if (saved) saved.textContent = "· " + msg; });
       });
     });
+    // due-date edits persist live
+    g.querySelectorAll("[data-due]").forEach(function (inp) {
+      inp.addEventListener("change", function () {
+        var i = Number(inp.getAttribute("data-due"));
+        v.generated.followUps[i].due = inp.value || v.generated.followUps[i].due;
+        var saved = document.getElementById("sv-follow-saved");
+        persistGenerated(function (msg) {
+          if (saved) saved.textContent = "· " + msg;
+          renderGenerated(v); // refresh overdue flags under the new date
+        });
+      });
+    });
+    // add a brand-new follow-up to the saved visit
+    g.querySelector("#sv-add-follow").addEventListener("click", function () {
+      var taskInput = g.querySelector("#sv-new-follow-task");
+      var dueInput = g.querySelector("#sv-new-follow-due");
+      var task = taskInput.value.trim();
+      if (!task) { taskInput.focus(); return; }
+      v.generated.followUps.push({
+        task: task,
+        due: dueInput.value || new Date().toISOString().slice(0, 10),
+        done: false
+      });
+      var saved = document.getElementById("sv-follow-saved");
+      persistGenerated(function (msg) {
+        if (saved) saved.textContent = "· " + msg;
+        renderGenerated(v);
+      });
+    });
+    // remove a follow-up (e.g. no longer needed)
+    g.querySelectorAll("[data-rm-follow]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var i = Number(b.getAttribute("data-rm-follow"));
+        var f = v.generated.followUps[i];
+        if (!f || !confirm('Remove follow-up "' + f.task + '"?')) return;
+        v.generated.followUps.splice(i, 1);
+        persistGenerated(function () { renderGenerated(v); });
+      });
+    });
+    // quote status changes persist live
+    g.querySelector("#sv-status").addEventListener("change", function (e) {
+      var saved = document.getElementById("sv-status-saved");
+      api("/api/visits/" + v.id, { method: "PATCH", body: { status: e.target.value } })
+        .then(function () { if (saved) saved.textContent = "· saved"; })
+        .catch(function (err) { if (saved) saved.textContent = "· " + err.message; });
+    });
+    // copy a ready-to-send client message for this quote
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "btn ghost";
+    copyBtn.id = "btn-copy-msg";
+    copyBtn.textContent = "Copy client message";
+    copyBtn.addEventListener("click", function () {
+      copyClientMessage(v, st);
+      copyBtn.textContent = "Copied!";
+      setTimeout(function () { copyBtn.textContent = "Copy client message"; }, 2000);
+    });
+    var head = g.querySelector(".quote-head");
+    if (head) head.appendChild(copyBtn);
   }
 
   function renderVisit(id) {

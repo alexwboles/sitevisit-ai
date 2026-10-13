@@ -107,6 +107,17 @@ function cleanList(x) {
   return x.map((s) => String(s || "").trim()).filter(Boolean);
 }
 
+/* Quote pipeline status: draft -> sent -> approved -> scheduled -> invoiced -> paid.
+ * Pure bookkeeping — no side effects, just where this visit stands. */
+const QUOTE_STATUSES = ["draft", "sent", "approved", "scheduled", "invoiced", "paid"];
+
+function cleanStatus(x, fallback) {
+  const s = String(x || "").trim().toLowerCase();
+  if (QUOTE_STATUSES.includes(s)) return s;
+  if (x === undefined || x === null || s === "") return fallback;
+  return null; // invalid — caller turns this into a 400
+}
+
 /* Validate uploaded visit photos. Each must be a small data-URL image
  * (png/jpeg/gif/webp), <= 1.5MB, max 12 per visit. Returns {ok, photos, error}. */
 function cleanPhotos(x) {
@@ -145,6 +156,10 @@ async function handle(req, res) {
     return sendJSON(res, 200, { ok: true, service: "sitevisit-ai", openai: false });
   }
 
+  if (m === "GET" && p === "/api/statuses") {
+    return sendJSON(res, 200, { ok: true, statuses: QUOTE_STATUSES });
+  }
+
   if (m === "POST" && p === "/api/generate") {
     const body = await readBody(req);
     const trade = body.trade || "General Handyman";
@@ -165,9 +180,9 @@ async function handle(req, res) {
         t + Number(it.qty || 0) * Number(it.unitPrice || 0), 0).toFixed(2);
     };
     const rows = [
-      ["number", "client", "address", "trade", "visitDate", "observations", "lineItems", "quoteSubtotal", "followUpsDone", "followUpsTotal"]
+      ["number", "client", "address", "trade", "visitDate", "status", "observations", "lineItems", "quoteSubtotal", "followUpsDone", "followUpsTotal"]
     ].concat(visits.map((v) => [
-      v.number, v.client, v.address, v.trade, v.visitDate,
+      v.number, v.client, v.address, v.trade, v.visitDate, v.status || "draft",
       (v.observations || []).length, ((v.generated || {}).items || []).length, quoteTotal(v),
       ((v.generated || {}).followUps || []).filter((f) => f.done).length,
       ((v.generated || {}).followUps || []).length
@@ -194,6 +209,8 @@ async function handle(req, res) {
       }
       const ph = cleanPhotos(body.photos);
       if (!ph.ok) return sendJSON(res, 400, { ok: false, error: ph.error });
+      const st = cleanStatus(body.status, "draft");
+      if (st === null) return sendJSON(res, 400, { ok: false, error: "unknown status (use one of: " + QUOTE_STATUSES.join(", ") + ")" });
       const visits = readVisits();
       const v = {
         id: newId(),
@@ -202,6 +219,7 @@ async function handle(req, res) {
         address: String(body.address || "").trim(),
         trade,
         visitDate: body.visitDate || new Date().toISOString().slice(0, 10),
+        status: st,
         observations: cleanList(body.observations),
         photoNotes: cleanList(body.photoNotes),
         photos: ph.photos,
@@ -228,6 +246,7 @@ async function handle(req, res) {
       copy.number = nextNumber(visits);
       copy.visitDate = new Date().toISOString().slice(0, 10);
       copy.createdAt = new Date().toISOString();
+      copy.status = "draft"; // a re-book is a fresh quote, not a fresh paid invoice
       visits.push(copy);
       writeVisits(visits);
       return sendJSON(res, 201, { ok: true, visit: copy });
@@ -243,6 +262,11 @@ async function handle(req, res) {
       if (body.observations !== undefined) v.observations = cleanList(body.observations);
       if (body.photoNotes !== undefined) v.photoNotes = cleanList(body.photoNotes);
       if (body.generated !== undefined) v.generated = body.generated;
+      if (body.status !== undefined) {
+        const st = cleanStatus(body.status, v.status || "draft");
+        if (st === null) return sendJSON(res, 400, { ok: false, error: "unknown status (use one of: " + QUOTE_STATUSES.join(", ") + ")" });
+        v.status = st;
+      }
       if (body.photos !== undefined) {
         const ph = cleanPhotos(body.photos);
         if (!ph.ok) return sendJSON(res, 400, { ok: false, error: ph.error });
