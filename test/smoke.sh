@@ -176,6 +176,8 @@ grep -q 'btn-send-quotely' "$DIR/public/app.js" && ok "app.js wires send-to-quot
 grep -q 'quotely-link' "$DIR/public/app.js" && ok "app.js shows quotely quote link" || bad "app.js missing quotely link"
 grep -q 'bank-src' "$DIR/public/index.html" && ok "index.html shows price-bank source" || bad "index.html missing bank source"
 curl -s -X DELETE "$BASE/api/visits/$VQID" >/dev/null
+# clean up the visit created in check 11 (keeps the committed demo data tidy)
+curl -s -X DELETE "$BASE/api/visits/$VID" >/dev/null 2>&1
 
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
