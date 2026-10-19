@@ -264,6 +264,11 @@
   function stagePhoto(file) {
     if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
     var img = new Image();
+    img.onerror = function () {
+      URL.revokeObjectURL(img.src);
+      var msg = document.getElementById("edit-msg");
+      if (msg) msg.textContent = "Could not load \"" + (file.name || "photo") + "\" — the file may be corrupt.";
+    };
     img.onload = function () {
       var max = 900, scale = Math.min(1, max / Math.max(img.width, img.height));
       var c = document.createElement("canvas");

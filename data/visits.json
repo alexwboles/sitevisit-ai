@@ -52,5 +52,59 @@
       "followUps": []
     },
     "createdAt": "2026-10-13T21:01:37.949Z"
+  },
+  {
+    "id": "mvficigum0nj7w",
+    "number": "SV-2026-0003",
+    "client": "Jane Smith",
+    "address": "123 Main St",
+    "trade": "Plumbing",
+    "visitDate": "2026-09-28",
+    "status": "approved",
+    "observations": [
+      "faucet drips"
+    ],
+    "photoNotes": [],
+    "photos": [],
+    "generated": {
+      "items": [
+        {
+          "description": "Faucet replacement",
+          "qty": 1,
+          "unit": "each",
+          "unitPrice": 145
+        }
+      ],
+      "punchList": [],
+      "followUps": []
+    },
+    "createdAt": "2026-10-19T17:07:52.063Z"
+  },
+  {
+    "id": "mvfiqabycqsj1l",
+    "number": "SV-2026-0004",
+    "client": "Jane Smith",
+    "address": "123 Main St",
+    "trade": "Plumbing",
+    "visitDate": "2026-09-28",
+    "status": "approved",
+    "observations": [
+      "faucet drips"
+    ],
+    "photoNotes": [],
+    "photos": [],
+    "generated": {
+      "items": [
+        {
+          "description": "Faucet replacement",
+          "qty": 1,
+          "unit": "each",
+          "unitPrice": 145
+        }
+      ],
+      "punchList": [],
+      "followUps": []
+    },
+    "createdAt": "2026-10-19T17:18:34.702Z"
   }
 ]
