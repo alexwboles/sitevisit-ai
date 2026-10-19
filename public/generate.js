@@ -167,7 +167,15 @@
       };
     });
     var photos = (v.photos || []).slice(0, 8).map(function (p) {
-      return { name: String(p.name || "photo"), dataUrl: String(p.dataUrl || "") };
+      return {
+        name: String(p.name || "photo"),
+        dataUrl: String(p.dataUrl || ""),
+        /* Extra fields (backward compatible — quotely's import reads the
+         * known fields and ignores these): the on-photo annotations. */
+        caption: String(p.caption || ""),
+        tag: (p.tag === "before" || p.tag === "after") ? p.tag : "",
+        addedAt: String(p.addedAt || "")
+      };
     });
     var openFollowUps = (g.followUps || []).filter(function (f) { return !f.done && f.due; })
       .sort(function (a, b) { return String(a.due).localeCompare(String(b.due)); });

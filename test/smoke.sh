@@ -22,14 +22,23 @@ done
 
 # start server
 export PORT
+BASE="http://localhost:$PORT"
 node "$DIR/server.js" >/tmp/sitevisit-smoke.log 2>&1 &
 SRV=$!
 cleanup() { kill $SRV 2>/dev/null; wait $SRV 2>/dev/null; }
 trap cleanup EXIT
+wait_for_srv() {
+  # the fixed sleep below is not enough under load — poll until the port answers
+  for i in $(seq 1 60); do
+    curl -s -o /dev/null --max-time 1 "$BASE/api/health" 2>/dev/null && return 0
+    kill -0 $SRV 2>/dev/null || return 1
+    sleep 0.25
+  done
+  return 1
+}
 sleep 1
 kill -0 $SRV 2>/dev/null || { bad "server process died on boot"; cat /tmp/sitevisit-smoke.log; echo "RESULT: $PASS passed, $FAIL failed"; exit 1; }
-
-BASE="http://localhost:$PORT"
+wait_for_srv || { bad "server never answered on $BASE"; cat /tmp/sitevisit-smoke.log; echo "RESULT: $PASS passed, $FAIL failed"; exit 1; }
 
 # 5. health
 H=$(curl -s "$BASE/api/health")
@@ -176,6 +185,77 @@ grep -q 'btn-send-quotely' "$DIR/public/app.js" && ok "app.js wires send-to-quot
 grep -q 'quotely-link' "$DIR/public/app.js" && ok "app.js shows quotely quote link" || bad "app.js missing quotely link"
 grep -q 'bank-src' "$DIR/public/index.html" && ok "index.html shows price-bank source" || bad "index.html missing bank source"
 curl -s -X DELETE "$BASE/api/visits/$VQID" >/dev/null
+# v2: on-photo annotations — captions + before/after tags (CompanyCam pattern)
+TINY2="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+TINYG="data:image/gif;base64,R0lGODdhAQABAIAAAP///////ywAAAAAAQABAAACAkQBADs="
+CAP=$(python3 -c "print('x'*200)")
+VA=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d "{\"client\":\"Annotate Case\",\"trade\":\"Plumbing\",\"observations\":[\"leak under sink\"],\"photoNotes\":[],\"photos\":[{\"name\":\"before.png\",\"dataUrl\":\"$TINY2\",\"caption\":\"$CAP\",\"tag\":\"before\"},{\"name\":\"plain.gif\",\"dataUrl\":\"$TINYG\",\"tag\":\"bogus\"}]}")
+VAID=$(echo "$VA" | python3 -c "import json,sys; print(json.load(sys.stdin)['visit']['id'])" 2>/dev/null)
+echo "$VA" | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['visit']['photos']
+assert v[0]['caption']=='x'*140, 'caption not trimmed to 140'
+assert v[0]['tag']=='before', 'tag not kept'
+assert v[1]['tag']=='', 'bogus tag not cleaned'
+assert v[1]['caption']=='', 'caption default'
+print('ok')" >/dev/null 2>&1 \
+  && ok "photos store caption (140-char cap) + before/after tag; bogus tag cleaned" || bad "photo annotation cleaning: ${VA:0:250}"
+# annotation edits preserve addedAt (feed order is honest)
+ADDED1=$(echo "$VA" | python3 -c "import json,sys; print(json.load(sys.stdin)['visit']['photos'][0]['addedAt'])")
+sleep 1
+PH2=$(echo "$VA" | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['visit']['photos']
+v[0]['caption']='new caption'
+print(json.dumps(v))")
+PA=$(curl -s -X PATCH "$BASE/api/visits/$VAID" -H 'Content-Type: application/json' -d "{\"photos\":$PH2}")
+echo "$PA" | grep -q '"caption":"new caption"' && echo "$PA" | grep -q "$ADDED1" \
+  && ok "annotation PATCH edits caption and preserves addedAt" || bad "annotation PATCH: ${PA:0:250}"
+# set-as-cover: PATCH with reordered array -> list coverPhoto follows photos[0]
+PHR=$(echo "$PA" | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['visit']['photos']
+v.reverse()
+print(json.dumps(v))")
+curl -s -X PATCH "$BASE/api/visits/$VAID" -H 'Content-Type: application/json' -d "{\"photos\":$PHR}" >/dev/null
+COVER=$(curl -s "$BASE/api/visits" | python3 -c "
+import json,sys
+vs=json.load(sys.stdin)['visits']
+v=[x for x in vs if x['id']=='$VAID'][0]
+print(v.get('coverPhoto','')[:15])")
+[ "$COVER" = "data:image/gif;" ] \
+  && ok "cover follows photos[0] after reorder (set-as-cover)" || bad "cover reorder: $COVER"
+# photo feed carries caption/tag
+PF=$(curl -s "$BASE/api/photos/recent?limit=20")
+echo "$PF" | grep -q '"tag":"before"' && echo "$PF" | grep -q '"caption":"new caption"' \
+  && ok "photo feed carries caption + before/after tag" || bad "feed annotations: ${PF:0:250}"
+# quotely payload carries caption/tag as extra fields (contract-safe)
+QP2=$(curl -s "$BASE/api/visits/$VAID/quotely-payload")
+echo "$QP2" | grep -q '"tag":"before"' && echo "$QP2" | grep -q '"name":"before.png"' \
+  && ok "quotely-payload photos carry caption/tag extras (contract-safe)" || bad "payload photos: ${QP2:0:250}"
+curl -s -X DELETE "$BASE/api/visits/$VAID" >/dev/null
+
+# v2 UI wiring: annotate mode, pipeline board, offline pill, sync chip, capture-first
+grep -q 'btn-annotate' "$DIR/public/index.html" && ok "index.html has Annotate button" || bad "index.html missing annotate"
+grep -q 'btn-annot-save' "$DIR/public/app.js" && ok "app.js saves photo annotations" || bad "app.js missing annot save"
+grep -q 'data-cover' "$DIR/public/app.js" && ok "app.js has set-as-cover" || bad "app.js missing set-as-cover"
+grep -q 'sv-photo-filter' "$DIR/public/index.html" && ok "index.html has before/after filter chips" || bad "index.html missing photo filter"
+grep -q 'renderPipeline' "$DIR/public/app.js" && ok "app.js has pipeline board" || bad "app.js missing pipeline"
+grep -q 'pipe-seg' "$DIR/public/style.css" && ok "style.css has pipeline segments" || bad "style.css missing pipeline"
+grep -q 'net-pill' "$DIR/public/index.html" && ok "index.html has online/offline pill" || bad "index.html missing net pill"
+grep -q 'updateNet' "$DIR/public/app.js" && ok "app.js tracks connectivity" || bad "app.js missing updateNet"
+grep -q 'bank-chip' "$DIR/public/index.html" && ok "index.html has price-bank sync chip" || bad "index.html missing bank chip"
+grep -q 'price-bank/refresh' "$DIR/public/app.js" && ok "app.js refreshes price bank from chip" || bad "app.js missing chip refresh"
+grep -q 'capture="environment"' "$DIR/public/index.html" && ok "index.html photo input has camera capture intent" || bad "index.html missing capture attr"
+grep -q 'thumb-cap' "$DIR/public/app.js" && ok "app.js captions staged photos in editor" || bad "app.js missing thumb captions"
+grep -q 'id="toast"' "$DIR/public/index.html" && ok "index.html has toast" || bad "index.html missing toast"
+grep -q 'stat-band' "$DIR/public/index.html" && ok "index.html has ledger stats" || bad "index.html missing stat band"
+grep -q 'Barlow+Condensed' "$DIR/public/index.html" && ok "index.html loads condensed display type" || bad "index.html missing display font"
+grep -q 'JetBrains+Mono' "$DIR/public/index.html" && ok "index.html loads mono ticket type" || bad "index.html missing mono font"
+# design rules: no rounded edges, no purple/blue gradients
+grep -q 'border-radius[ ]*:' "$DIR/public/style.css" && bad "style.css has border-radius (no-rounded-edges rule)" || ok "style.css has zero border-radius"
+grep -qiE 'linear-gradient\([^)]*(purple|violet|indigo|#6|#4f46|#7c3)' "$DIR/public/style.css" && bad "style.css has purple/blue gradient" || ok "style.css has no purple/blue gradients"
 # clean up the visit created in check 11 (keeps the committed demo data tidy)
 curl -s -X DELETE "$BASE/api/visits/$VID" >/dev/null 2>&1
 

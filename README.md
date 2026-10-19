@@ -4,7 +4,9 @@ Job walkthrough notes → quote draft + punch list + follow-ups. Log a site visi
 
 ## Features
 
-- **Structured visit form** — client, address, trade, date, free-text observations, photo notes ("photo 3: water stain on ceiling"), plus **real photo attachments** — images are resized in the browser, stored with the visit, and shown as a thumbnail strip; blobs are stripped from list responses and CSV exports
+- **Structured visit form** — client, address, trade, date, free-text observations, photo notes ("photo 3: water stain on ceiling"), plus **real photo attachments** — images are resized in the browser, stored with the visit, and shown as a thumbnail strip; blobs are stripped from list responses and CSV exports. Capture-first on mobile: a big camera-capture button (`capture="environment"`) leads the form.
+- **On-photo annotations** — every photo carries a **caption** and a **before/after tag** (CompanyCam-style proof-of-work pairing): set them while capturing or later in the visit's Annotate mode; tag one photo as the **cover**; filter the gallery by All / Before / After; captions and tags ride the Quotely handoff payload and show in the live photo feed.
+- **Quote pipeline board** — the Draft → Sent → Approved → Scheduled → Invoiced → Paid pipeline as a tappable chevron board with live per-stage counts; tap a stage to filter the ledger. A stat band (visits, photos, open quote value, overdue tasks) heads the list.
 - **One-click work product** — keyword → line-item bank across 9 trades generates:
   - **Quote draft** — line items with quantities, units, and local price-bank rates (editable in the browser)
   - **Punch list** — keyword-matched closeout tasks (re-caulk, magnet-sweep, filter check…) plus generic closeout items
@@ -37,6 +39,8 @@ price bank and enable the Send-to-Quotely handoff. Without it the app works
 fully offline on the shipped price-bank snapshot.
 
 No API keys. No network calls (except the optional quotely-ai link above). Works offline on the job site.
+
+The top bar always shows the app's field reliability: an **online/offline pill** (this app is 100% local — it keeps working with no signal) and a **price-bank sync chip** (source + version, click to refresh from Quotely).
 
 ## API
 

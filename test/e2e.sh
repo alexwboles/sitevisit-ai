@@ -20,8 +20,13 @@ echo "[]" > "$DIR/data/visits.json"
 start_srv() {
   node "$DIR/server.js" >/tmp/sitevisit-e2e.log 2>&1 &
   SRV=$!
-  sleep 1
-  kill -0 $SRV 2>/dev/null || { bad "server failed to boot"; cat /tmp/sitevisit-e2e.log; return 1; }
+  # the fixed sleep below is not enough under load — poll until the port answers
+  for i in $(seq 1 60); do
+    curl -s -o /dev/null --max-time 1 "$BASE/api/health" 2>/dev/null && return 0
+    kill -0 $SRV 2>/dev/null || break
+    sleep 0.25
+  done
+  bad "server failed to boot"; cat /tmp/sitevisit-e2e.log; return 1
 }
 stop_srv() { kill $SRV 2>/dev/null; wait $SRV 2>/dev/null; }
 trap 'stop_srv 2>/dev/null; if [ -n "$BACKUP" ]; then cp "$BACKUP" "$DIR/data/visits.json"; else echo "[]" > "$DIR/data/visits.json"; fi' EXIT
@@ -177,12 +182,22 @@ echo "$P13B" | py "len(d['visit']['generated']['followUps'])" | grep -q '1' && o
 STUBQ_PORT=3498
 node "$DIR/test/stub-quotely.js" "$STUBQ_PORT" >/tmp/stub-quotely.log 2>&1 &
 STUBQ=$!
-sleep 1
+for i in $(seq 1 40); do
+  curl -s -o /dev/null --max-time 1 "http://localhost:$STUBQ_PORT/api/price-bank" 2>/dev/null && break
+  kill -0 $STUBQ 2>/dev/null || break
+  sleep 0.25
+done
 kill -0 $STUBQ 2>/dev/null || { bad "stub quotely failed to boot"; cat /tmp/stub-quotely.log; }
 stop_srv
 export QUOTELY_URL="http://localhost:$STUBQ_PORT"
 start_srv
-PB14=$(curl -s "$BASE/api/price-bank")
+# the boot-time live pull is async — allow it a few seconds to land
+PB14=""; TRIES=0
+while [ $TRIES -lt 10 ]; do
+  PB14=$(curl -s "$BASE/api/price-bank")
+  echo "$PB14" | grep -q '"source":"quotely-live"' && break
+  TRIES=$((TRIES+1)); sleep 1
+done
 echo "$PB14" | grep -q '"source":"quotely-live"' && ok "flow14: live price bank from quotely-ai" || bad "flow14 bank: ${PB14:0:200}"
 echo "$PB14" | grep -q '"version":"9.9.9-stub"' && ok "flow14: stub bank version picked up" || bad "flow14 version"
 # generate against the live stub bank (faucet 145, leak 175)
@@ -210,6 +225,28 @@ start_srv
 PB14B=$(curl -s "$BASE/api/price-bank")
 echo "$PB14B" | grep -q '"source":"fallback"' && ok "flow14: without QUOTELY_URL falls back to shipped snapshot" || bad "flow14 fallback: ${PB14B:0:200}"
 echo "$PB14B" | grep -q '"version":"1.0.0"' && ok "flow14: fallback is the canonical v1.0.0 bank" || bad "flow14 fallback version"
+
+# ---- Flow 15: annotated photos — caption/tag round-trip, feed stays honest ----
+F15=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d "{\"client\":\"Annot E2E\",\"trade\":\"Roofing\",\"observations\":[\"shingles missing\"],\"photoNotes\":[],\"photos\":[{\"name\":\"a.png\",\"dataUrl\":\"$TINY\",\"caption\":\"Ridge cap missing\",\"tag\":\"before\"}]}")
+VID15=$(echo "$F15" | py "d['visit']['id']")
+G15=$(curl -s "$BASE/api/visits/$VID15")
+echo "$G15" | py "d['visit']['photos'][0]['caption']" | grep -q 'Ridge cap missing' && ok "flow15: caption round-trips on detail" || bad "flow15 caption"
+echo "$G15" | py "d['visit']['photos'][0]['tag']" | grep -q 'before' && ok "flow15: before tag round-trips on detail" || bad "flow15 tag"
+FEED15=$(curl -s "$BASE/api/photos/recent?limit=3")
+echo "$FEED15" | py "d['photos'][0]['caption']" | grep -q 'Ridge cap missing' && ok "flow15: newest annotated photo tops the feed" || bad "flow15 feed order"
+# edit the caption; the photo must NOT jump the feed (addedAt preserved)
+P15=$(echo "$G15" | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['visit']['photos']
+v[0]['caption']='Updated caption'; v[0]['tag']='after'
+print(json.dumps(v))")
+curl -s -X PATCH "$BASE/api/visits/$VID15" -H 'Content-Type: application/json' -d "{\"photos\":$P15}" >/dev/null
+FEED15B=$(curl -s "$BASE/api/photos/recent?limit=3")
+echo "$FEED15B" | py "d['photos'][0]['tag']" | grep -q 'after' && ok "flow15: tag edit -> after, feed position kept" || bad "flow15 edit"
+QP15=$(curl -s "$BASE/api/visits/$VID15/quotely-payload")
+echo "$QP15" | py "d['payload']['photos'][0]['caption']" | grep -q 'Updated caption' && ok "flow15: quotely payload carries the annotation" || bad "flow15 payload"
+curl -s -X DELETE "$BASE/api/visits/$VID15" >/dev/null
 
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

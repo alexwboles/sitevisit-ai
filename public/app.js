@@ -61,6 +61,60 @@
     return "$" + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 3400);
+  }
+
+  /* ---------- connectivity: this app is 100% local, say so ---------- */
+  function updateNet() {
+    var el = document.getElementById("net-pill");
+    var on = navigator.onLine;
+    el.classList.toggle("online", on);
+    el.classList.toggle("offline", !on);
+    el.querySelector(".net-label").textContent = on ? "Online" : "Offline";
+    el.title = on
+      ? "Online — the price bank can refresh from Quotely"
+      : "Offline — everything keeps working locally; the shipped price-bank snapshot is in use";
+  }
+  window.addEventListener("online", updateNet);
+  window.addEventListener("offline", updateNet);
+
+  /* ---------- price-bank sync chip ---------- */
+  function renderBankChip() {
+    var dot = document.getElementById("bank-dot");
+    var label = document.getElementById("bank-src");
+    api("/api/price-bank").then(function (b) {
+      if (!b || !b.version) {
+        label.textContent = "price bank unavailable";
+        dot.className = "dot fallback";
+        return;
+      }
+      var src = b.source === "quotely-live" ? "Quotely live" : b.source === "cache" ? "cached" : "snapshot";
+      label.textContent = "v" + b.version + " · " + src;
+      dot.className = "dot " + (b.source === "quotely-live" ? "live" : b.source === "cache" ? "cache" : "fallback");
+    }).catch(function () {
+      label.textContent = "offline · snapshot";
+      dot.className = "dot fallback";
+    });
+  }
+  document.getElementById("bank-chip").addEventListener("click", function () {
+    var label = document.getElementById("bank-src");
+    label.textContent = "refreshing…";
+    api("/api/price-bank/refresh", { method: "POST" }).then(function (r) {
+      renderBankChip();
+      toast("Price bank refreshed — v" + r.version + " (" + (r.source === "quotely-live" ? "live from Quotely" : r.source) + ")");
+    }).catch(function (e) {
+      renderBankChip();
+      toast("Refresh failed: " + e.message);
+    });
+  });
+
   /* Build a ready-to-send client message for a quote draft. */
   function buildClientMessage(v, st) {
     var lines = ["Hi " + v.client + " — here's your quote from my visit on " + v.visitDate +
@@ -80,13 +134,14 @@
 
   function copyClientMessage(v, st) {
     var text = buildClientMessage(v, st);
-    function done() { return true; }
+    function done() { toast("Client message copied — paste it into a text or email"); }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).catch(function () { fallbackCopy(text); });
-      return done();
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      return true;
     }
     fallbackCopy(text);
-    return done();
+    done();
+    return true;
   }
 
   function fallbackCopy(text) {
@@ -116,20 +171,26 @@
     return out;
   }
 
+  function quoteSubtotal(v) {
+    return ((v.generated || {}).items || []).reduce(function (t, it) {
+      return t + Number(it.qty || 0) * Number(it.unitPrice || 0);
+    }, 0);
+  }
+
   function visitCard(v) {
     var cover = v.coverPhoto
       ? '<a class="jobcover" href="#/visit/' + v.id + '"><img src="' + v.coverPhoto + '" alt="Site photo — ' + esc(v.client) + '" loading="lazy">' +
         (v.photoCount > 1 ? '<span class="cover-count">' + v.photoCount + " photos</span>" : "") + "</a>"
-      : '<a class="jobcover nocover" href="#/visit/' + v.id + '"><span>No photos yet</span></a>';
-    return '<div class="card jobcard">' + cover +
-      '<div class="ticket-no">' + esc(v.number) + "</div>" +
-      '<h3><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
+      : '<a class="jobcover nocover" href="#/visit/' + v.id + '"><span>No photos yet — tap to add</span></a>';
+    return '<article class="card jobcard">' + cover +
+      '<div class="stub">' +
+      '<div class="ticket-row"><span class="ticket-no">' + esc(v.number) + "</span>" + statusPill(v) + "</div>" +
+      '<h3 class="client-name"><a href="#/visit/' + v.id + '">' + esc(v.client) + "</a></h3>" +
       '<div class="ticket-meta"><span class="trade">' + esc(v.trade) + "</span>" +
       esc(v.address || "no address") + " · " + esc(v.visitDate) + "</div>" +
       '<div class="ticket-foot"><span>' + v.observations.length + " observations</span>" +
-      statusPill(v) +
       followUpBadges(v) +
-      (v.generated ? '<span class="ready">Work product ready</span>' : "<span></span>") + "</div></div>";
+      (v.generated ? '<span class="ready">Work product ready</span>' : "") + "</div></div></article>";
   }
 
   function renderPhotoFeed() {
@@ -139,11 +200,55 @@
       if (!photos.length) { wrap.classList.add("hidden"); return; }
       wrap.classList.remove("hidden");
       document.getElementById("photo-feed").innerHTML = photos.map(function (p) {
-        return '<a class="feed-item" href="#/visit/' + p.visitId + '" title="' + esc(p.client) + " — " + esc(p.name) + '">' +
-          '<img src="' + p.dataUrl + '" alt="' + esc(p.name) + '" loading="lazy">' +
-          '<span class="feed-cap"><strong>' + esc(p.client) + "</strong>" + esc(p.name) + "</span></a>";
+        return '<a class="feed-item" href="#/visit/' + p.visitId + '" title="' + esc(p.client) + " — " + esc(p.caption || p.name) + '">' +
+          (p.tag === "before" || p.tag === "after" ? '<span class="tagbadge ' + p.tag + '">' + p.tag + "</span>" : "") +
+          '<img src="' + p.dataUrl + '" alt="' + esc(p.caption || p.name) + '" loading="lazy">' +
+          '<span class="feed-cap"><strong>' + esc(p.client) + "</strong>" + esc(p.caption || p.name) +
+          '<span class="feed-note">' + esc((p.addedAt || "").slice(0, 10)) + "</span></span></a>";
       }).join("");
     }).catch(function () { wrap.classList.add("hidden"); });
+  }
+
+  function renderStats() {
+    var band = document.getElementById("stat-band");
+    var photos = allVisits.reduce(function (t, v) { return t + (v.photoCount || 0); }, 0);
+    var openVal = allVisits
+      .filter(function (v) { return statusOf(v) === "draft" || statusOf(v) === "sent"; })
+      .reduce(function (t, v) { return t + quoteSubtotal(v); }, 0);
+    var today = new Date().toISOString().slice(0, 10);
+    var overdue = allVisits.reduce(function (t, v) {
+      return t + ((v.generated || {}).followUps || []).filter(function (f) { return !f.done && f.due && f.due < today; }).length;
+    }, 0);
+    band.innerHTML =
+      stat(allVisits.length, "Visits logged", false) +
+      stat(photos, "Site photos", false) +
+      stat(money(openVal), "Open quote value", false) +
+      stat(overdue, "Overdue tasks", overdue > 0);
+    function stat(val, label, hot) {
+      return '<div class="stat' + (hot ? " hot" : "") + '"><b>' + val + "</b><span>" + label + "</span></div>";
+    }
+  }
+
+  /* JobNimbus-style pipeline board: tappable stage segments with live counts. */
+  function renderPipeline() {
+    var counts = { "": allVisits.length };
+    STATUSES.forEach(function (s) { counts[s.id] = 0; });
+    allVisits.forEach(function (v) { counts[statusOf(v)]++; });
+    var cur = document.getElementById("visit-status-filter").value;
+    var segs = [{ id: "", label: "All" }].concat(STATUSES);
+    var box = document.getElementById("pipeline");
+    box.innerHTML = segs.map(function (sg, i) {
+      var cls = "pipe-seg" + (i === 0 ? " first" : i === segs.length - 1 ? " last" : "") + (sg.id === cur ? " active" : "");
+      return '<button type="button" class="' + cls + '" data-stage="' + sg.id + '" aria-pressed="' + (sg.id === cur) + '">' +
+        '<span class="p-count">' + (counts[sg.id] || 0) + '</span><span class="p-label">' + esc(sg.label) + "</span></button>";
+    }).join("");
+    box.querySelectorAll(".pipe-seg").forEach(function (b) {
+      b.addEventListener("click", function () {
+        document.getElementById("visit-status-filter").value = b.getAttribute("data-stage");
+        applyVisitFilter();
+        renderPipeline();
+      });
+    });
   }
 
   function applyVisitFilter() {
@@ -159,9 +264,9 @@
     });
     var el = document.getElementById("visit-list");
     if (!allVisits.length) {
-      el.innerHTML = '<p class="muted">No visits yet. <a href="#/new">Log your first walkthrough</a>.</p>';
+      el.innerHTML = '<div class="empty"><h2>No visits yet</h2><p>Your field ledger is empty. Log your first walkthrough — photos, observations, and a quote draft in one tap.</p><a class="btn primary big" href="#/new">+ Log first visit</a></div>';
     } else if (!list.length) {
-      el.innerHTML = '<p class="muted">No visits match your search.</p>';
+      el.innerHTML = '<div class="empty"><h2>No matches</h2><p>No visits match the current search and filters. Clear them to see the full ledger.</p></div>';
     } else {
       el.innerHTML = list.map(visitCard).join("");
     }
@@ -169,13 +274,8 @@
 
   function renderList() {
     show("view-list");
-    api("/api/price-bank").then(function (b) {
-      var el = document.getElementById("bank-src");
-      if (el && b && b.version) {
-        el.textContent = "Price bank v" + b.version + " (" +
-          (b.source === "quotely-live" ? "live from Quotely" : b.source === "cache" ? "cached copy" : "shipped snapshot") + ")";
-      }
-    }).catch(function () { /* bank info is informational only */ });
+    renderBankChip();
+    updateNet();
     var sel = document.getElementById("visit-trade-filter");
     if (!sel.options.length) {
       sel.innerHTML = '<option value="">All trades</option>' +
@@ -189,15 +289,20 @@
     api("/api/visits").then(function (j) {
       allVisits = j.visits;
       applyVisitFilter();
+      renderStats();
+      renderPipeline();
       renderPhotoFeed();
     }).catch(function (e) {
-      document.getElementById("visit-list").innerHTML = '<p class="muted">Error: ' + esc(e.message) + "</p>";
+      document.getElementById("visit-list").innerHTML = '<div class="empty"><h2>Could not load visits</h2><p>' + esc(e.message) + "</p></div>";
     });
   }
 
   document.getElementById("visit-search").addEventListener("input", applyVisitFilter);
   document.getElementById("visit-trade-filter").addEventListener("change", applyVisitFilter);
-  document.getElementById("visit-status-filter").addEventListener("change", applyVisitFilter);
+  document.getElementById("visit-status-filter").addEventListener("change", function () {
+    applyVisitFilter();
+    renderPipeline();
+  });
 
   /* ---------- editor ---------- */
   var wp = null; // current generated work product (editable)
@@ -247,8 +352,8 @@
     dynRow(document.getElementById("photo-list"), "photo note…");
   });
 
-  /* ---------- photo attachments (resized client-side, stored with the visit) ---------- */
-  var photoBlobs = []; // staged {name, dataUrl} for the visit being edited
+  /* ---------- photo attachments: resized client-side, captioned + tagged ---------- */
+  var photoBlobs = []; // staged {name, dataUrl, caption, tag} for the visit being edited
 
   function renderPhotoThumbs() {
     var box = document.getElementById("photo-thumbs");
@@ -257,13 +362,31 @@
       var fig = document.createElement("figure");
       fig.className = "photo-thumb";
       var img = document.createElement("img");
-      img.src = p.dataUrl; img.alt = p.name;
-      var cap = document.createElement("figcaption");
-      cap.textContent = p.name.length > 18 ? p.name.slice(0, 16) + "…" : p.name;
+      img.src = p.dataUrl; img.alt = p.caption || p.name;
+      var body = document.createElement("div");
+      body.className = "thumb-body";
+      var cap = document.createElement("input");
+      cap.type = "text"; cap.className = "thumb-cap"; cap.maxLength = 140;
+      cap.placeholder = "Caption this photo…"; cap.value = p.caption || "";
+      cap.setAttribute("aria-label", "Caption for photo " + (i + 1));
+      cap.addEventListener("input", function () { photoBlobs[i].caption = cap.value.trim(); });
+      var row = document.createElement("div");
+      row.className = "thumb-row";
+      var tag = document.createElement("select");
+      tag.className = "thumb-tag";
+      tag.setAttribute("aria-label", "Before or after tag for photo " + (i + 1));
+      tag.innerHTML = '<option value="">No tag</option>' +
+        '<option value="before">Before</option><option value="after">After</option>';
+      tag.value = p.tag || "";
+      tag.addEventListener("change", function () {
+        photoBlobs[i].tag = (tag.value === "before" || tag.value === "after") ? tag.value : "";
+      });
       var rm = document.createElement("button");
-      rm.type = "button"; rm.className = "btn ghost"; rm.textContent = "✕";
+      rm.type = "button"; rm.className = "btn ghost thumb-rm"; rm.textContent = "Remove";
       rm.addEventListener("click", function () { photoBlobs.splice(i, 1); renderPhotoThumbs(); });
-      fig.appendChild(img); fig.appendChild(cap); fig.appendChild(rm);
+      row.appendChild(tag); row.appendChild(rm);
+      body.appendChild(cap); body.appendChild(row);
+      fig.appendChild(img); fig.appendChild(body);
       box.appendChild(fig);
     });
   }
@@ -283,7 +406,7 @@
       c.height = Math.max(1, Math.round(img.height * scale));
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(img.src);
-      photoBlobs.push({ name: file.name || "photo", dataUrl: c.toDataURL("image/jpeg", 0.75) });
+      photoBlobs.push({ name: file.name || "photo", dataUrl: c.toDataURL("image/jpeg", 0.75), caption: "", tag: "" });
       renderPhotoThumbs();
     };
     img.src = URL.createObjectURL(file);
@@ -403,7 +526,9 @@
         visitDate: document.getElementById("v-date").value,
         observations: readRows(document.getElementById("obs-list")),
         photoNotes: readRows(document.getElementById("photo-list")),
-        photos: photoBlobs,
+        photos: photoBlobs.map(function (p) {
+          return { name: p.name, dataUrl: p.dataUrl, caption: p.caption, tag: p.tag };
+        }),
         generated: wp
       }
     }).then(function (j) { location.hash = "#/visit/" + j.visit.id; })
@@ -432,7 +557,7 @@
     if (window.SiteVisitEngine) {
       st = window.SiteVisitEngine.quoteTotals(v.generated.items, st.taxPct || 0, st.discountPct || 0);
     }
-    g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><h2>Quote draft</h2>' +
+    g.innerHTML = '<div class="quote-sheet"><div class="quote-head"><div><p class="kicker small">Generated</p><h2>Quote draft</h2></div>' +
       '<span class="quote-total">' + money(st.total) + "</span></div>" +
       '<div class="status-row"><label>Quote status <select id="sv-status" aria-label="Quote status">' +
       STATUSES.map(function (s) {
@@ -537,7 +662,7 @@
     g.querySelector("#sv-status").addEventListener("change", function (e) {
       var saved = document.getElementById("sv-status-saved");
       api("/api/visits/" + v.id, { method: "PATCH", body: { status: e.target.value } })
-        .then(function () { if (saved) saved.textContent = "· saved"; })
+        .then(function () { if (saved) saved.textContent = "· saved"; toast("Quote status → " + statusLabel(e.target.value)); })
         .catch(function (err) { if (saved) saved.textContent = "· " + err.message; });
     });
     // copy a ready-to-send client message for this quote
@@ -547,8 +672,6 @@
     copyBtn.textContent = "Copy client message";
     copyBtn.addEventListener("click", function () {
       copyClientMessage(v, st);
-      copyBtn.textContent = "Copied!";
-      setTimeout(function () { copyBtn.textContent = "Copy client message"; }, 2000);
     });
     var head = g.querySelector(".quote-head");
     if (head) head.appendChild(copyBtn);
@@ -579,28 +702,108 @@
         v.observations.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") || "<li class='muted'>none</li>";
       document.getElementById("sv-photos").innerHTML =
         v.photoNotes.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") || "<li class='muted'>none</li>";
-      var strip = document.getElementById("sv-photostrip");
-      if (v.photos && v.photos.length) {
-        strip.innerHTML = "<h3>Site photos <span class='count'>" + v.photos.length + "</span></h3>";
-        var gal = document.createElement("div");
-        gal.className = "photo-gallery";
-        v.photos.forEach(function (p) {
-          var fig = document.createElement("figure");
-          fig.className = "gal-item";
-          var a = document.createElement("a");
-          a.href = p.dataUrl; a.target = "_blank"; a.rel = "noopener";
-          var img = document.createElement("img");
-          img.src = p.dataUrl; img.alt = p.name; img.loading = "lazy";
-          a.appendChild(img);
-          var cap = document.createElement("figcaption");
-          cap.textContent = p.name + " · " + (p.addedAt || "").slice(0, 10);
-          fig.appendChild(a); fig.appendChild(cap);
-          gal.appendChild(fig);
-        });
-        strip.appendChild(gal);
-      } else {
-        strip.innerHTML = "";
+
+      /* --- annotated photo gallery with before/after filter --- */
+      var photoFilter = "all";
+      var annotMode = false;
+
+      function photoBadge(p, i) {
+        var b = "";
+        if (p.tag === "before" || p.tag === "after") b += '<span class="tagbadge ' + p.tag + '">' + p.tag + "</span>";
+        if (i === 0) b += '<span class="tagbadge cover">Cover</span>';
+        return b;
       }
+
+      function persistPhotos(done) {
+        api("/api/visits/" + v.id, { method: "PATCH", body: { photos: v.photos } })
+          .then(function (r) { v.photos = r.visit.photos || v.photos; done && done(); })
+          .catch(function (e) { toast("Could not save photos: " + e.message); });
+      }
+
+      function renderGallery() {
+        var strip = document.getElementById("sv-photostrip");
+        var count = document.getElementById("sv-photo-count");
+        var photos = v.photos || [];
+        if (!photos.length) {
+          strip.innerHTML = "";
+          count.textContent = "";
+          return;
+        }
+        count.textContent = photos.length + (photos.length === 1 ? " photo" : " photos");
+        // annotate mode always shows every photo so indexes stay stable
+        var list = photos.map(function (p, i) { return { p: p, i: i }; })
+          .filter(function (x) { return annotMode || photoFilter === "all" || (x.p.tag || "") === photoFilter; });
+        if (!list.length) {
+          strip.innerHTML = '<p class="muted">No "' + esc(photoFilter) + '" photos on this visit yet — tag one in Annotate mode.</p>';
+          return;
+        }
+        strip.innerHTML = list.map(function (x) {
+          var p = x.p, i = x.i;
+          return '<figure class="gal-item' + (annotMode ? " annot" : "") + '" data-idx="' + i + '">' +
+            photoBadge(p, i) +
+            '<a href="' + p.dataUrl + '" target="_blank" rel="noopener"><img src="' + p.dataUrl + '" alt="' + esc(p.caption || p.name) + '" loading="lazy"></a>' +
+            '<figcaption>' +
+              (p.caption ? '<span class="gal-cap">' + esc(p.caption) + "</span>" : "") +
+              '<span class="gal-meta">' + esc(p.name) + " · " + esc((p.addedAt || "").slice(0, 10)) + "</span>" +
+            "</figcaption>" +
+            '<div class="gal-annot">' +
+              '<input type="text" class="annot-cap" maxlength="140" placeholder="Caption this photo…" value="' + esc(p.caption || "") + '" aria-label="Caption for photo ' + (i + 1) + '">' +
+              '<div class="annot-row">' +
+                '<select class="annot-tag" aria-label="Before or after tag for photo ' + (i + 1) + '">' +
+                  '<option value="">No tag</option>' +
+                  '<option value="before"' + (p.tag === "before" ? " selected" : "") + ">Before</option>" +
+                  '<option value="after"' + (p.tag === "after" ? " selected" : "") + ">After</option>" +
+                "</select>" +
+                (i > 0 ? '<button type="button" class="btn ghost small cover-btn" data-cover="' + i + '">Set as cover</button>' : "") +
+              "</div>" +
+            "</div></figure>";
+        }).join("");
+        strip.querySelectorAll("[data-cover]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var idx = Number(b.getAttribute("data-cover"));
+            var moved = v.photos.splice(idx, 1)[0];
+            v.photos.unshift(moved);
+            persistPhotos(function () { toast("Cover photo updated"); renderGallery(); });
+          });
+        });
+      }
+
+      document.getElementById("btn-annotate").onclick = function () {
+        annotMode = !annotMode;
+        this.textContent = annotMode ? "Done" : "Annotate";
+        document.getElementById("annot-bar").classList.toggle("hidden", !annotMode);
+        renderGallery();
+      };
+      document.getElementById("btn-annot-save").onclick = function () {
+        document.querySelectorAll("#sv-photostrip .gal-item").forEach(function (fig) {
+          var i = Number(fig.getAttribute("data-idx"));
+          if (!v.photos[i]) return;
+          v.photos[i].caption = fig.querySelector(".annot-cap").value.trim().slice(0, 140);
+          var t = fig.querySelector(".annot-tag").value;
+          v.photos[i].tag = (t === "before" || t === "after") ? t : "";
+        });
+        persistPhotos(function () {
+          toast("Annotations saved");
+          annotMode = false;
+          document.getElementById("btn-annotate").textContent = "Annotate";
+          document.getElementById("annot-bar").classList.add("hidden");
+          renderGallery();
+        });
+      };
+      document.getElementById("btn-annot-cancel").onclick = function () {
+        renderVisit(v.id); // re-fetch, discarding unsaved annotation edits
+        toast("Annotation edits discarded");
+      };
+      document.querySelectorAll("#sv-photo-filter .chip").forEach(function (ch) {
+        ch.onclick = function () {
+          document.querySelectorAll("#sv-photo-filter .chip").forEach(function (c) { c.classList.remove("active"); });
+          ch.classList.add("active");
+          photoFilter = ch.getAttribute("data-f");
+          renderGallery();
+        };
+      });
+      renderGallery();
+
       renderGenerated(v);
       renderQuotelyLink(v);
       document.getElementById("btn-send-quotely").onclick = function () {
@@ -616,24 +819,24 @@
             btn.textContent = "Send to Quotely";
             currentVisit = r.visit || v;
             renderQuotelyLink(currentVisit);
-            alert((r.created ? "Created " : "Updated ") + r.quote.number + " in Quotely.");
+            toast((r.created ? "Created " : "Updated ") + r.quote.number + " in Quotely");
           })
           .catch(function (e) {
             btn.disabled = false;
             btn.textContent = "Send to Quotely";
-            alert("Error: " + e.message);
+            toast("Send failed: " + e.message);
           });
       };
       document.getElementById("btn-dup-visit").onclick = function () {
         api("/api/visits/" + id + "/duplicate", { method: "POST" })
           .then(function (r) { location.hash = "#/visit/" + r.visit.id; })
-          .catch(function (e) { alert("Error: " + e.message); });
+          .catch(function (e) { toast("Error: " + e.message); });
       };
       document.getElementById("btn-del-visit").onclick = function () {
         if (!confirm("Delete visit " + v.number + " (" + v.client + ")? This cannot be undone.")) return;
         api("/api/visits/" + id, { method: "DELETE" })
           .then(function () { location.hash = "#/"; })
-          .catch(function (e) { alert("Error: " + e.message); });
+          .catch(function (e) { toast("Error: " + e.message); });
       };
     }).catch(function (e) {
       document.getElementById("sv-title").textContent = "Error: " + e.message;
@@ -650,5 +853,7 @@
     else renderList();
   }
   window.addEventListener("hashchange", route);
+  updateNet();
   route();
 })();
+

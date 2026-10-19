@@ -228,7 +228,9 @@ function cleanStatus(x, fallback) {
 }
 
 /* Validate uploaded visit photos. Each must be a small data-URL image
- * (png/jpeg/gif/webp), <= 1.5MB, max 12 per visit. Returns {ok, photos, error}. */
+ * (png/jpeg/gif/webp), <= 1.5MB, max 12 per visit. Photos carry optional
+ * CompanyCam-style annotations: caption (free text on the photo) and tag
+ * ("before"|"after" proof-of-work pairing). Returns {ok, photos, error}. */
 function cleanPhotos(x) {
   if (x === undefined || x === null) return { ok: true, photos: [] };
   if (!Array.isArray(x)) return { ok: false, error: "photos must be an array" };
@@ -236,6 +238,8 @@ function cleanPhotos(x) {
   const photos = [];
   for (const p of x) {
     const name = String((p && p.name) || "photo").trim().slice(0, 80) || "photo";
+    const caption = String((p && p.caption) || "").trim().slice(0, 140);
+    const tag = (p && (p.tag === "before" || p.tag === "after")) ? p.tag : "";
     const dataUrl = String((p && p.dataUrl) || "");
     if (!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
       return { ok: false, error: "photo '" + name + "' is not a supported image data URL" };
@@ -243,7 +247,14 @@ function cleanPhotos(x) {
     if (dataUrl.length > 2000000) {
       return { ok: false, error: "photo '" + name + "' exceeds the 1.5MB limit" };
     }
-    photos.push({ name, dataUrl, addedAt: new Date().toISOString() });
+    /* Keep an honest timestamp: reuse the supplied addedAt when it's a
+     * valid ISO date (annotation edits re-send the same photos), so
+     * caption/tag edits don't reshuffle the live photo feed. */
+    let addedAt = p && p.addedAt;
+    if (typeof addedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(addedAt)) {
+      addedAt = new Date().toISOString();
+    }
+    photos.push({ name, caption, tag, dataUrl, addedAt });
   }
   return { ok: true, photos };
 }
@@ -337,7 +348,9 @@ async function handle(req, res) {
       (v.photos || []).forEach(function (ph) {
         feed.push({
           visitId: v.id, client: v.client, address: v.address || "",
-          visitDate: v.visitDate, name: ph.name, addedAt: ph.addedAt,
+          visitDate: v.visitDate, name: ph.name,
+          caption: ph.caption || "", tag: ph.tag || "",
+          addedAt: ph.addedAt,
           dataUrl: ph.dataUrl
         });
       });
