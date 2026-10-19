@@ -1,0 +1,3 @@
+# local-only: cached price-bank copy pulled from quotely-ai (machine-specific)
+data/price-bank.cache.json
+*.tmp

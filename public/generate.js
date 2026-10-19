@@ -2,6 +2,14 @@
  * UMD module: required by server.js (Node) and usable in the browser.
  * Turns free-text site-visit observations into draft quote line items,
  * a punch list, and follow-up tasks. All local heuristics, no API keys.
+ *
+ * LINE-ITEM PRICING: sitevisit-ai does NOT keep its own keyword->price
+ * bank. It consumes the canonical price bank owned by quotely-ai
+ * (GET {quotely}/api/price-bank, versioned JSON). The server loads the
+ * live bank when QUOTELY_URL is set, else the last cached copy, else the
+ * shipped snapshot in price-bank.fallback.json (machine-generated from
+ * quotely-ai, never hand-edited). Punch-list and follow-up rules below
+ * are sitevisit-specific and stay here.
  */
 (function (root, factory) {
   if (typeof module !== "undefined" && module.exports) {
@@ -17,90 +25,72 @@
     "Landscaping", "Carpentry", "Flooring", "General Handyman"
   ];
 
-  // keyword -> line item bank per trade. Hand-written for this project.
-  var LINE_BANK = {
-    "Plumbing": [
-      { k: ["faucet", "tap"], d: "Faucet replacement (parts + labor)", unit: "each", price: 145 },
-      { k: ["leak", "drip"], d: "Leak diagnosis and repair", unit: "each", price: 120 },
-      { k: ["water heater", "hot water"], d: "Water heater install (40-gal)", unit: "each", price: 950 },
-      { k: ["toilet", "wax ring"], d: "Toilet reset / replacement", unit: "each", price: 220 },
-      { k: ["drain", "clog"], d: "Drain cleaning / auger service", unit: "each", price: 135 },
-      { k: ["pipe", "repipe"], d: "Pipe repair / section replacement", unit: "each", price: 180 },
-      { k: ["sump"], d: "Sump pump install / replacement", unit: "each", price: 425 }
-    ],
-    "Electrical": [
-      { k: ["outlet", "receptacle"], d: "Outlet replacement / new outlet", unit: "each", price: 95 },
-      { k: ["panel", "breaker"], d: "Panel / breaker work", unit: "each", price: 280 },
-      { k: ["light", "fixture", "ceiling fan"], d: "Light fixture install", unit: "each", price: 140 },
-      { k: ["switch"], d: "Switch replacement / 3-way wiring", unit: "each", price: 85 },
-      { k: ["ev charger", "car charger"], d: "EV charger circuit install", unit: "each", price: 650 },
-      { k: ["smoke detector", "co detector"], d: "Smoke/CO detector install", unit: "each", price: 75 },
-      { k: ["troubleshoot", "no power"], d: "Electrical troubleshooting (first hour)", unit: "hour", price: 110 }
-    ],
-    "Painting": [
-      { k: ["bedroom", "room"], d: "Interior room paint (2 coats)", unit: "room", price: 380 },
-      { k: ["exterior", "siding"], d: "Exterior painting", unit: "sq ft", price: 2.5 },
-      { k: ["drywall", "patch"], d: "Drywall patch and blend", unit: "each", price: 90 },
-      { k: ["ceiling", "popcorn"], d: "Ceiling repaint / texture repair", unit: "each", price: 220 },
-      { k: ["cabinet"], d: "Cabinet refinishing (per linear ft)", unit: "lin ft", price: 65 },
-      { k: ["deck", "fence"], d: "Deck / fence stain", unit: "sq ft", price: 2.0 },
-      { k: ["trim", "baseboard"], d: "Trim and baseboard enamel", unit: "lin ft", price: 4.5 }
-    ],
-    "HVAC": [
-      { k: ["furnace"], d: "Furnace replacement (80% AFUE)", unit: "each", price: 3200 },
-      { k: ["ac ", "air conditioner", "condenser"], d: "AC condenser replacement", unit: "each", price: 2800 },
-      { k: ["thermostat", "nest", "ecobee"], d: "Smart thermostat install", unit: "each", price: 195 },
-      { k: ["duct"], d: "Duct repair / sealing", unit: "each", price: 240 },
-      { k: ["tune-up", "tuneup", "maintenance"], d: "Seasonal HVAC tune-up", unit: "each", price: 129 },
-      { k: ["filter"], d: "Filter replacement + system check", unit: "each", price: 65 },
-      { k: ["mini split", "ductless"], d: "Ductless mini-split install (per head)", unit: "each", price: 2100 }
-    ],
-    "Roofing": [
-      { k: ["shingle", "re-roof", "reroof"], d: "Asphalt shingle re-roof", unit: "sq", price: 425 },
-      { k: ["repair", "patch"], d: "Roof leak repair", unit: "each", price: 350 },
-      { k: ["gutter"], d: "Gutter install / replacement", unit: "lin ft", price: 12 },
-      { k: ["flashing", "chimney"], d: "Flashing repair / replacement", unit: "each", price: 275 },
-      { k: ["skylight"], d: "Skylight replacement", unit: "each", price: 850 },
-      { k: ["vent"], d: "Roof vent install", unit: "each", price: 180 },
-      { k: ["inspection"], d: "Roof inspection + report", unit: "each", price: 149 }
-    ],
-    "Landscaping": [
-      { k: ["mow", "lawn"], d: "Lawn renovation / sod (per sq ft)", unit: "sq ft", price: 1.8 },
-      { k: ["mulch"], d: "Mulch bed install", unit: "cu yd", price: 85 },
-      { k: ["plant", "shrub", "bed"], d: "Planting bed install", unit: "each", price: 320 },
-      { k: ["tree", "trim"], d: "Tree trimming (per tree)", unit: "each", price: 260 },
-      { k: ["sprinkler", "irrigation"], d: "Irrigation zone add / repair", unit: "zone", price: 450 },
-      { k: ["paver", "patio", "walkway"], d: "Paver patio / walkway", unit: "sq ft", price: 16 },
-      { k: ["cleanup", "leaves", "debris"], d: "Seasonal yard cleanup", unit: "each", price: 280 }
-    ],
-    "Carpentry": [
-      { k: ["deck"], d: "Deck build / rebuild", unit: "sq ft", price: 28 },
-      { k: ["door"], d: "Door hang / replacement", unit: "each", price: 240 },
-      { k: ["trim", "casing"], d: "Trim / casing install", unit: "lin ft", price: 7.5 },
-      { k: ["shelf", "closet"], d: "Custom shelving / closet build", unit: "each", price: 480 },
-      { k: ["fence"], d: "Fence build / repair", unit: "lin ft", price: 32 },
-      { k: ["rot", "siding"], d: "Rot repair / siding section", unit: "each", price: 310 },
-      { k: ["stairs", "railing"], d: "Stair / railing repair", unit: "each", price: 390 }
-    ],
-    "Flooring": [
-      { k: ["hardwood", "oak"], d: "Hardwood install / refinish", unit: "sq ft", price: 9.5 },
-      { k: ["laminate", "vinyl", "lvp"], d: "LVP / laminate install", unit: "sq ft", price: 6.5 },
-      { k: ["tile"], d: "Tile install", unit: "sq ft", price: 11 },
-      { k: ["carpet"], d: "Carpet install (per sq yd)", unit: "sq yd", price: 38 },
-      { k: ["grout"], d: "Grout repair / re-grout", unit: "sq ft", price: 4 },
-      { k: ["subfloor", "squeak"], d: "Subfloor repair", unit: "each", price: 220 },
-      { k: ["baseboard", "transition"], d: "Baseboard / transition install", unit: "lin ft", price: 5.5 }
-    ],
-    "General Handyman": [
-      { k: ["drywall", "patch"], d: "Drywall patch and paint blend", unit: "each", price: 110 },
-      { k: ["caulk"], d: "Caulk / seal refresh", unit: "each", price: 65 },
-      { k: ["gutter"], d: "Gutter cleaning", unit: "each", price: 150 },
-      { k: ["furniture", "assemble"], d: "Furniture assembly", unit: "each", price: 80 },
-      { k: ["tv mount", "mount"], d: "TV / heavy item mounting", unit: "each", price: 95 },
-      { k: ["pressure wash", "power wash"], d: "Pressure washing", unit: "sq ft", price: 0.35 },
-      { k: ["odd job", "misc", "various"], d: "Half-day handyman block", unit: "half-day", price: 280 }
-    ]
-  };
+  /* Shipped snapshot of the canonical bank (quotely-ai owned).
+   * Regenerate with: node -e "const Q=require('<quotely>/public/generate.js');
+   * require('fs').writeFileSync('public/price-bank.fallback.json',
+   * JSON.stringify(Q.priceBank(),null,1))" */
+  var FALLBACK = null;
+  var FALLBACK_VERSION = null;
+  try {
+    if (typeof require !== "undefined") {
+      FALLBACK = require("./price-bank.fallback.json");
+      FALLBACK_VERSION = FALLBACK && FALLBACK.version;
+    }
+  } catch (e) { FALLBACK = null; }
+
+  /* Active bank: set by the server at boot (live > cache > fallback).
+   * The browser build never generates, so it stays null there. */
+  var activeBank = null;
+  var activeSource = "fallback";
+
+  function setPriceBank(bank, source) {
+    if (!bank || !Array.isArray(bank.items)) throw new Error("price bank needs an items array");
+    activeBank = bank;
+    activeSource = source || "quotely-live";
+  }
+
+  function currentBank() {
+    return activeBank || FALLBACK;
+  }
+
+  function priceBankInfo() {
+    var b = currentBank();
+    return {
+      source: activeBank ? activeSource : "fallback",
+      version: (b && b.version) || FALLBACK_VERSION || null,
+      itemCount: (b && b.items ? b.items.length : 0),
+      trades: TRADES.slice()
+    };
+  }
+
+  function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  /* Slice the canonical bank to one trade, in canonical order:
+   * [{ k:[keywords], d:description, unit, price }]. */
+  function lineBankFor(trade, bank) {
+    bank = bank || currentBank();
+    var out = [];
+    ((bank && bank.items) || []).forEach(function (entry) {
+      if ((entry.trades || []).indexOf(trade) === -1) return;
+      out.push({
+        k: entry.keys.slice(),
+        d: entry.name,
+        unit: entry.unit,
+        price: entry.price
+      });
+    });
+    return out;
+  }
+
+  /* Back-compat shape of the old hand-written LINE_BANK, built from the
+   * shipped snapshot (machine-derived, never hand-edited). */
+  var LINE_BANK = (function () {
+    var m = {};
+    TRADES.forEach(function (t) { m[t] = lineBankFor(t, FALLBACK); });
+    return m;
+  })();
 
   var PUNCH_RULES = [
     { k: ["paint"], t: "Touch up paint in all work areas" },
@@ -143,13 +133,68 @@
     return d.toISOString().slice(0, 10);
   }
 
-  function generateWorkProduct(trade, observations, photoNotes) {
+  function keywordHit(keys, text) {
+    return keys.some(function (kw) {
+      return new RegExp("\\b" + escapeRegExp(kw) + "s?\\b", "i").test(text);
+    });
+  }
+
+  /* sitevisit status -> quotely quote status (the handoff contract). */
+  var STATUS_TO_QUOTELY = {
+    draft: "draft",
+    sent: "sent",
+    approved: "won",
+    scheduled: "won",
+    invoiced: "won",
+    paid: "won"
+  };
+  function quotelyStatusFor(sitevisitStatus) {
+    return STATUS_TO_QUOTELY[sitevisitStatus] || "draft";
+  }
+
+  /* Build the quotely import payload for a saved visit (the handoff
+   * contract — mirrors POST /api/quotes/import on quotely-ai). */
+  function quotelyPayload(visit) {
+    var v = visit || {};
+    var g = v.generated || {};
+    var totals = g.totals || {};
+    var items = (g.items || []).map(function (it) {
+      return {
+        description: String(it.description || ""),
+        qty: Number(it.qty) || 0,
+        unit: String(it.unit || "each"),
+        unitPrice: Number(it.unitPrice) || 0
+      };
+    });
+    var photos = (v.photos || []).slice(0, 8).map(function (p) {
+      return { name: String(p.name || "photo"), dataUrl: String(p.dataUrl || "") };
+    });
+    var openFollowUps = (g.followUps || []).filter(function (f) { return !f.done && f.due; })
+      .sort(function (a, b) { return String(a.due).localeCompare(String(b.due)); });
+    return {
+      source: "sitevisit-ai",
+      visitId: v.id || "",
+      visitNumber: v.number || "",
+      customer: v.client || "",
+      address: v.address || "",
+      trade: v.trade || "General Handyman",
+      description: ((v.observations || []).concat(v.photoNotes || [])).join("\n"),
+      items: items,
+      photos: photos,
+      taxPct: Number(totals.taxPct) || 0,
+      discountPct: Number(totals.discountPct) || 0,
+      followUpDate: openFollowUps.length ? openFollowUps[0].due : "",
+      notes: "",
+      status: quotelyStatusFor(v.status)
+    };
+  }
+
+  function generateWorkProduct(trade, observations, photoNotes, bank) {
     var text = ((observations || []).concat(photoNotes || [])).join("\n").toLowerCase();
     var items = [];
-    var bank = LINE_BANK[trade] || [];
-    bank.forEach(function (entry) {
-      var hit = entry.k.some(function (kw) { return text.indexOf(kw) !== -1; });
-      if (hit) {
+    var bankItems = lineBankFor(trade, bank || currentBank());
+    bankItems.forEach(function (entry) {
+      if (keywordHit(entry.k, text)) {
         items.push({
           description: entry.d, qty: 1, unit: entry.unit,
           unitPrice: entry.price, source: "local"
@@ -183,6 +228,11 @@
   return {
     TRADES: TRADES,
     LINE_BANK: LINE_BANK,
+    setPriceBank: setPriceBank,
+    priceBankInfo: priceBankInfo,
+    lineBankFor: lineBankFor,
+    quotelyPayload: quotelyPayload,
+    quotelyStatusFor: quotelyStatusFor,
     generateWorkProduct: generateWorkProduct,
     quoteTotals: quoteTotals
   };

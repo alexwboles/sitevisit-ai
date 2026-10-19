@@ -29,6 +29,7 @@
       <select id="visit-trade-filter" aria-label="Filter by trade"></select>
       <select id="visit-status-filter" aria-label="Filter by quote status"></select>
       <a class="btn ghost" href="/api/visits/export.csv" download>Export CSV</a>
+      <span class="muted small" id="bank-src"></span>
     </div>
     <div id="visit-list" class="cards"></div>
     <div id="photo-feed-wrap" class="hidden">
@@ -120,8 +121,10 @@
     <div id="sv-generated"></div>
     <div class="row"><a href="#/" class="btn ghost">Back to visits</a>
       <button id="btn-print2" class="btn">Print summary</button>
+      <button id="btn-send-quotely" class="btn primary">Send to Quotely</button>
       <button id="btn-dup-visit" class="btn">Duplicate visit</button>
       <button id="btn-del-visit" class="btn ghost danger">Delete visit</button></div>
+    <p class="muted" id="quotely-link"></p>
   </section>
 </main>
 

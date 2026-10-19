@@ -55,7 +55,7 @@ echo "$G2" | grep -qi 'magnet' && ok "flow3: roofing punch list has magnet-sweep
 # ---- Flow 4: landscaping visit end-to-end ----
 G4=$(curl -s -X POST "$BASE/api/generate" -H 'Content-Type: application/json' \
   -d '{"trade":"Landscaping","observations":["install new planting bed along front walk","refresh mulch in all beds","hoa approval needed before work"],"photoNotes":["photo 2: front walk bed area"]}')
-echo "$G4" | grep -qi 'planting bed' && ok "flow4: landscaping -> planting bed item" || bad "flow4: ${G4:0:250}"
+echo "$G4" | grep -qi 'garden bed' && ok "flow4: landscaping -> garden bed planting item (consolidated bank)" || bad "flow4: ${G4:0:250}"
 echo "$G4" | grep -qi 'HOA approval' && ok "flow4: hoa keyword -> HOA follow-up" || bad "flow4 hoa: ${G4:0:300}"
 echo "$G4" | grep -qi 'water in new plantings' && ok "flow4: landscaping punch item present" || bad "flow4 punch"
 
@@ -172,6 +172,44 @@ echo "$G13" | py "d['visit']['generated']['followUps'][0]['due']" | grep -q '202
 P13B=$(curl -s -X PATCH "$BASE/api/visits/$VID13" -H 'Content-Type: application/json' \
   -d '{"generated":{"items":[],"punchList":[],"followUps":[{"task":"Order filter","due":"2026-11-05","done":false}]}}')
 echo "$P13B" | py "len(d['visit']['generated']['followUps'])" | grep -q '1' && ok "flow13: follow-up removal persisted" || bad "flow13 remove"
+
+# ---- Flow 14: quotely-ai wiring — live price bank + send-to-quotely (stub) ----
+STUBQ_PORT=3498
+node "$DIR/test/stub-quotely.js" "$STUBQ_PORT" >/tmp/stub-quotely.log 2>&1 &
+STUBQ=$!
+sleep 1
+kill -0 $STUBQ 2>/dev/null || { bad "stub quotely failed to boot"; cat /tmp/stub-quotely.log; }
+stop_srv
+export QUOTELY_URL="http://localhost:$STUBQ_PORT"
+start_srv
+PB14=$(curl -s "$BASE/api/price-bank")
+echo "$PB14" | grep -q '"source":"quotely-live"' && ok "flow14: live price bank from quotely-ai" || bad "flow14 bank: ${PB14:0:200}"
+echo "$PB14" | grep -q '"version":"9.9.9-stub"' && ok "flow14: stub bank version picked up" || bad "flow14 version"
+# generate against the live stub bank (faucet 145, leak 175)
+G14=$(curl -s -X POST "$BASE/api/generate" -H 'Content-Type: application/json' \
+  -d '{"trade":"Plumbing","observations":["bathroom faucet drips nonstop"],"photoNotes":[]}')
+echo "$G14" | grep -qi 'faucet' && ok "flow14: live bank drives generation" || bad "flow14 generate: ${G14:0:200}"
+V14=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d "{\"client\":\"Handoff E2E\",\"trade\":\"Plumbing\",\"observations\":[\"faucet drips\"],\"photoNotes\":[],\"generated\":$(echo "$G14" | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({'items':d['items'],'punchList':[],'followUps':[]}))")}")
+VID14=$(echo "$V14" | py "d['visit']['id']")
+S14=$(curl -s -X POST "$BASE/api/visits/$VID14/send-to-quotely")
+echo "$S14" | grep -q '"created":true' && ok "flow14: send-to-quotely creates the quotely quote" || bad "flow14 send: ${S14:0:250}"
+echo "$S14" | grep -q '"quoteNumber":"Q-2026-9001"' && ok "flow14: visit records the quotely quote number" || bad "flow14 link"
+IMP14=$(curl -s "http://localhost:$STUBQ_PORT/stub/imports")
+echo "$IMP14" | grep -q "\"visitId\":\"$VID14\"" && ok "flow14: quotely got the import with the visit id" || bad "flow14 import body"
+echo "$IMP14" | grep -q '"source":"sitevisit-ai"' && ok "flow14: import tagged source=sitevisit-ai" || bad "flow14 source tag"
+# re-send upserts (stub reports created:false on the second import)
+S14B=$(curl -s -X POST "$BASE/api/visits/$VID14/send-to-quotely")
+echo "$S14B" | grep -q '"created":false' && ok "flow14: re-send upserts instead of duplicating" || bad "flow14 resend"
+curl -s -X DELETE "$BASE/api/visits/$VID14" >/dev/null
+kill $STUBQ 2>/dev/null; wait $STUBQ 2>/dev/null
+unset QUOTELY_URL
+rm -f "$DIR/data/price-bank.cache.json"
+stop_srv
+start_srv
+PB14B=$(curl -s "$BASE/api/price-bank")
+echo "$PB14B" | grep -q '"source":"fallback"' && ok "flow14: without QUOTELY_URL falls back to shipped snapshot" || bad "flow14 fallback: ${PB14B:0:200}"
+echo "$PB14B" | grep -q '"version":"1.0.0"' && ok "flow14: fallback is the canonical v1.0.0 bank" || bad "flow14 fallback version"
 
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

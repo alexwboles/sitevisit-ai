@@ -1,0 +1,924 @@
+{
+ "version": "1.0.0",
+ "currency": "USD",
+ "updated": "2026-10-19",
+ "tripFee": 65,
+ "trades": [
+  "Plumbing",
+  "Electrical",
+  "Painting",
+  "Landscaping",
+  "Roofing",
+  "HVAC",
+  "Carpentry",
+  "Flooring",
+  "Cleaning",
+  "General Handyman"
+ ],
+ "items": [
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "faucet",
+    "tap",
+    "spigot"
+   ],
+   "name": "Faucet replacement (parts + labor)",
+   "unit": "each",
+   "price": 145
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "toilet",
+    "wax ring"
+   ],
+   "name": "Toilet repair / replacement",
+   "unit": "each",
+   "price": 220
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "water heater",
+    "hot water heater",
+    "hot water tank"
+   ],
+   "name": "Water heater replacement",
+   "unit": "each",
+   "price": 1250
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "leak",
+    "leaking",
+    "drip",
+    "burst pipe",
+    "pipe repair"
+   ],
+   "name": "Leak / pipe repair",
+   "unit": "each",
+   "price": 175
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "drain",
+    "clog",
+    "clogged",
+    "sewer line"
+   ],
+   "name": "Drain cleaning",
+   "unit": "each",
+   "price": 165
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "shower",
+    "bathtub",
+    "tub"
+   ],
+   "name": "Shower / tub fixture work",
+   "unit": "each",
+   "price": 195
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "garbage disposal",
+    "disposal",
+    "kitchen sink"
+   ],
+   "name": "Sink / disposal install",
+   "unit": "each",
+   "price": 185
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "sump pump"
+   ],
+   "name": "Sump pump replacement",
+   "unit": "each",
+   "price": 450
+  },
+  {
+   "trades": [
+    "Plumbing"
+   ],
+   "keys": [
+    "repipe",
+    "re-pipe",
+    "pipe replacement"
+   ],
+   "name": "Repipe / section replacement",
+   "unit": "each",
+   "price": 180
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "outlet",
+    "socket",
+    "receptacle",
+    "gfci"
+   ],
+   "name": "Outlet installation",
+   "unit": "each",
+   "price": 95
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "light fixture",
+    "chandelier",
+    "recessed light",
+    "can light",
+    "pendant"
+   ],
+   "name": "Light fixture installation",
+   "unit": "each",
+   "price": 120
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "ceiling fan"
+   ],
+   "name": "Ceiling fan installation",
+   "unit": "each",
+   "price": 175
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "breaker",
+    "electrical panel",
+    "panel upgrade",
+    "panel",
+    "fuse box"
+   ],
+   "name": "Breaker / panel work",
+   "unit": "each",
+   "price": 350
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "light switch",
+    "dimmer",
+    "switch"
+   ],
+   "name": "Switch / dimmer replacement",
+   "unit": "each",
+   "price": 75
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "wiring",
+    "rewire"
+   ],
+   "name": "Wiring / rewiring",
+   "unit": "hr",
+   "price": 95
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "ev charger",
+    "car charger",
+    "evse"
+   ],
+   "name": "EV charger circuit install",
+   "unit": "each",
+   "price": 650
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "smoke detector",
+    "co detector",
+    "smoke alarm"
+   ],
+   "name": "Smoke/CO detector install",
+   "unit": "each",
+   "price": 75
+  },
+  {
+   "trades": [
+    "Electrical"
+   ],
+   "keys": [
+    "troubleshoot",
+    "troubleshooting",
+    "no power",
+    "diagnose"
+   ],
+   "name": "Electrical troubleshooting (first hour)",
+   "unit": "hr",
+   "price": 110
+  },
+  {
+   "trades": [
+    "Painting"
+   ],
+   "keys": [
+    "exterior paint"
+   ],
+   "name": "Exterior painting",
+   "unit": "sq ft",
+   "price": 2.75
+  },
+  {
+   "trades": [
+    "Painting"
+   ],
+   "keys": [
+    "paint",
+    "repaint",
+    "painting"
+   ],
+   "name": "Interior painting",
+   "unit": "room",
+   "price": 395
+  },
+  {
+   "trades": [
+    "Painting",
+    "General Handyman"
+   ],
+   "keys": [
+    "drywall",
+    "patch",
+    "spackle"
+   ],
+   "name": "Drywall repair",
+   "unit": "each",
+   "price": 185
+  },
+  {
+   "trades": [
+    "Painting"
+   ],
+   "keys": [
+    "cabinet paint",
+    "cabinet refinishing",
+    "refinish cabinets"
+   ],
+   "name": "Cabinet refinishing",
+   "unit": "each",
+   "price": 150
+  },
+  {
+   "trades": [
+    "Painting"
+   ],
+   "keys": [
+    "ceiling",
+    "popcorn ceiling"
+   ],
+   "name": "Ceiling repaint / texture repair",
+   "unit": "each",
+   "price": 220
+  },
+  {
+   "trades": [
+    "Painting"
+   ],
+   "keys": [
+    "stain",
+    "restain",
+    "deck stain",
+    "fence stain"
+   ],
+   "name": "Deck / fence stain",
+   "unit": "sq ft",
+   "price": 2
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "mow",
+    "lawn",
+    "grass"
+   ],
+   "name": "Lawn mowing",
+   "unit": "visit",
+   "price": 55
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "mulch"
+   ],
+   "name": "Mulch installation",
+   "unit": "cu yd",
+   "price": 95
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "tree",
+    "trim",
+    "prune",
+    "branch",
+    "stump"
+   ],
+   "name": "Tree trimming / removal",
+   "unit": "each",
+   "price": 225
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "bush",
+    "shrub",
+    "hedge"
+   ],
+   "name": "Shrub / hedge trimming",
+   "unit": "each",
+   "price": 85
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "sod",
+    "turf"
+   ],
+   "name": "Sod installation",
+   "unit": "sq ft",
+   "price": 2.25
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "garden",
+    "flower bed",
+    "planting"
+   ],
+   "name": "Garden bed planting",
+   "unit": "each",
+   "price": 150
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "sprinkler",
+    "irrigation"
+   ],
+   "name": "Sprinkler / irrigation work",
+   "unit": "each",
+   "price": 195
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "paver",
+    "patio",
+    "walkway"
+   ],
+   "name": "Paver patio / walkway",
+   "unit": "sq ft",
+   "price": 16
+  },
+  {
+   "trades": [
+    "Landscaping"
+   ],
+   "keys": [
+    "cleanup",
+    "yard cleanup",
+    "debris removal"
+   ],
+   "name": "Seasonal yard cleanup",
+   "unit": "each",
+   "price": 280
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "roof",
+    "roofing"
+   ],
+   "name": "Roof repair",
+   "unit": "sq",
+   "price": 450
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "shingle",
+    "re-roof",
+    "reroof",
+    "new roof"
+   ],
+   "name": "Asphalt shingle re-roof",
+   "unit": "sq",
+   "price": 425
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "roof leak",
+    "leak repair",
+    "roof patch"
+   ],
+   "name": "Roof leak repair",
+   "unit": "each",
+   "price": 350
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "gutter",
+    "gutters"
+   ],
+   "name": "Gutter installation / repair",
+   "unit": "ft",
+   "price": 9
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "flashing",
+    "chimney"
+   ],
+   "name": "Flashing / chimney repair",
+   "unit": "each",
+   "price": 275
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "skylight"
+   ],
+   "name": "Skylight replacement",
+   "unit": "each",
+   "price": 850
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "roof vent",
+    "ridge vent",
+    "attic vent"
+   ],
+   "name": "Roof vent installation",
+   "unit": "each",
+   "price": 180
+  },
+  {
+   "trades": [
+    "Roofing"
+   ],
+   "keys": [
+    "roof inspection"
+   ],
+   "name": "Roof inspection + report",
+   "unit": "each",
+   "price": 149
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "thermostat",
+    "nest",
+    "ecobee"
+   ],
+   "name": "Thermostat installation",
+   "unit": "each",
+   "price": 175
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "ac",
+    "air conditioner",
+    "air conditioning",
+    "heat pump",
+    "hvac"
+   ],
+   "name": "HVAC service / repair",
+   "unit": "each",
+   "price": 295
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "duct",
+    "ductwork"
+   ],
+   "name": "Ductwork repair",
+   "unit": "each",
+   "price": 350
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "furnace"
+   ],
+   "name": "Furnace replacement (80% AFUE)",
+   "unit": "each",
+   "price": 3200
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "tune-up",
+    "tuneup",
+    "maintenance"
+   ],
+   "name": "Seasonal HVAC tune-up",
+   "unit": "each",
+   "price": 129
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "filter",
+    "filters"
+   ],
+   "name": "Filter replacement + system check",
+   "unit": "each",
+   "price": 65
+  },
+  {
+   "trades": [
+    "HVAC"
+   ],
+   "keys": [
+    "mini split",
+    "mini-split",
+    "ductless"
+   ],
+   "name": "Ductless mini-split install (per head)",
+   "unit": "each",
+   "price": 2100
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "deck"
+   ],
+   "name": "Deck build / repair",
+   "unit": "sq ft",
+   "price": 28
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "fence"
+   ],
+   "name": "Fence installation / repair",
+   "unit": "ft",
+   "price": 32
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "door"
+   ],
+   "name": "Door installation",
+   "unit": "each",
+   "price": 275
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "cabinet"
+   ],
+   "name": "Cabinet installation",
+   "unit": "each",
+   "price": 225
+  },
+  {
+   "trades": [
+    "Carpentry",
+    "Flooring"
+   ],
+   "keys": [
+    "baseboard",
+    "trim work",
+    "crown molding",
+    "casing",
+    "transition"
+   ],
+   "name": "Trim / molding work",
+   "unit": "ft",
+   "price": 6.5
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "shelf",
+    "shelving",
+    "closet"
+   ],
+   "name": "Custom shelving / closet build",
+   "unit": "each",
+   "price": 480
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "rot",
+    "siding"
+   ],
+   "name": "Rot repair / siding section",
+   "unit": "each",
+   "price": 310
+  },
+  {
+   "trades": [
+    "Carpentry"
+   ],
+   "keys": [
+    "stairs",
+    "stair",
+    "railing"
+   ],
+   "name": "Stair / railing repair",
+   "unit": "each",
+   "price": 390
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "hardwood",
+    "oak"
+   ],
+   "name": "Hardwood install / refinish",
+   "unit": "sq ft",
+   "price": 9.5
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "laminate",
+    "vinyl",
+    "lvp"
+   ],
+   "name": "LVP / laminate install",
+   "unit": "sq ft",
+   "price": 6.5
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "tile",
+    "tiles"
+   ],
+   "name": "Tile install",
+   "unit": "sq ft",
+   "price": 11
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "carpet install",
+    "install carpet",
+    "new carpet",
+    "carpet replacement"
+   ],
+   "name": "Carpet install",
+   "unit": "sq yd",
+   "price": 38
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "grout",
+    "re-grout",
+    "regrout"
+   ],
+   "name": "Grout repair / re-grout",
+   "unit": "sq ft",
+   "price": 4
+  },
+  {
+   "trades": [
+    "Flooring"
+   ],
+   "keys": [
+    "subfloor",
+    "squeak"
+   ],
+   "name": "Subfloor repair",
+   "unit": "each",
+   "price": 220
+  },
+  {
+   "trades": [
+    "Cleaning"
+   ],
+   "keys": [
+    "carpet cleaning",
+    "rug cleaning"
+   ],
+   "name": "Carpet cleaning",
+   "unit": "room",
+   "price": 85
+  },
+  {
+   "trades": [
+    "Cleaning"
+   ],
+   "keys": [
+    "window"
+   ],
+   "name": "Window cleaning",
+   "unit": "each",
+   "price": 12
+  },
+  {
+   "trades": [
+    "Cleaning"
+   ],
+   "keys": [
+    "clean",
+    "cleaning",
+    "deep clean"
+   ],
+   "name": "Deep cleaning",
+   "unit": "hr",
+   "price": 45
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "caulk",
+    "caulking",
+    "sealant"
+   ],
+   "name": "Caulk / seal refresh",
+   "unit": "each",
+   "price": 65
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "gutter cleaning",
+    "clean gutters"
+   ],
+   "name": "Gutter cleaning",
+   "unit": "each",
+   "price": 150
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "furniture",
+    "assemble",
+    "assembly"
+   ],
+   "name": "Furniture assembly",
+   "unit": "each",
+   "price": 80
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "tv mount",
+    "tv mounting",
+    "mount tv"
+   ],
+   "name": "TV / heavy item mounting",
+   "unit": "each",
+   "price": 95
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "pressure wash",
+    "pressure washing",
+    "power wash"
+   ],
+   "name": "Pressure washing",
+   "unit": "sq ft",
+   "price": 0.35
+  },
+  {
+   "trades": [
+    "General Handyman"
+   ],
+   "keys": [
+    "odd job",
+    "misc",
+    "various",
+    "handyman"
+   ],
+   "name": "Half-day handyman block",
+   "unit": "half-day",
+   "price": 280
+  }
+ ]
+}

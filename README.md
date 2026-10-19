@@ -14,6 +14,7 @@ Job walkthrough notes → quote draft + punch list + follow-ups. Log a site visi
 - **Saved visits** — every visit stored with its generated work product; printable summary
 - **Copy-ready client message** — one click builds a send-ready text/email with the quote line items, discount/tax breakdown, and total, personalized with the client's name and visit number
 - **Quote math** — editable tax % and discount % with a full subtotal → discount → tax → total breakdown on the draft and the saved report
+- **Quotely handoff** — one click sends the quote draft to Quotely AI (`Send to Quotely` on the visit page). A sitevisit draft *is* a quotely quote: the visit id upserts, so re-sending updates the same quote instead of duplicating it. Needs `QUOTELY_URL` pointed at your quotely-ai server; the button explains what's missing when it isn't set
 - **Duplicate visits** — one click re-books a visit at the same site (new number, today's date)
 - **Delete visits** — remove mistaken entries from the ledger
 - **Visit search + trade filter** — find visits by client, address, or number
@@ -30,7 +31,12 @@ npm start
 npm test                  # smoke + end-to-end tests
 ```
 
-No API keys. No network calls. Works offline on the job site.
+Pipeline wiring (optional): point `QUOTELY_URL` at your quotely-ai server
+(e.g. `QUOTELY_URL=http://localhost:3001 node server.js`) to pull the live
+price bank and enable the Send-to-Quotely handoff. Without it the app works
+fully offline on the shipped price-bank snapshot.
+
+No API keys. No network calls (except the optional quotely-ai link above). Works offline on the job site.
 
 ## API
 
@@ -41,9 +47,31 @@ No API keys. No network calls. Works offline on the job site.
 - `POST /api/visits/:id/duplicate` — re-book a visit at the same site (new id + number, today's date)
 - `DELETE /api/visits/:id` — remove a visit from the ledger
 - `GET /api/visits/export.csv` — whole ledger as CSV with quote subtotals + follow-up progress
+- `GET /api/visits/:id/quotely-payload` — the quotely import payload for this visit (see contract below)
+- `POST /api/visits/:id/send-to-quotely` — push this visit's quote draft into quotely-ai's ledger (needs `QUOTELY_URL`; upserts on the visit id)
 
 ## Price bank
 
-`public/generate.js` holds the per-trade keyword → line-item bank (~60 entries). Prices are US ballparks — edit them for your market.
+SiteVisit AI does **not** keep its own keyword→price bank — it consumes the
+canonical bank owned by **quotely-ai** (this was the portfolio's duplicated
+bank: the two hand-written banks are now one).
+
+- **Format**: `{version, currency, updated, tripFee, trades[], items[]}`, each item `{trades[], keys[], name, unit, price}` (USD, parts + labor ballparks).
+- **Location/URL**: live at `GET {quotely-ai}/api/price-bank`. This server tries, in order: the live bank (when `QUOTELY_URL` is set) → the last cached copy (`data/price-bank.cache.json`) → the shipped snapshot (`public/price-bank.fallback.json`, machine-generated from quotely-ai, never hand-edited).
+- **Versioning**: semver — major = breaking field changes, minor = new items/trades, patch = price tweaks.
+- **Status**: `GET /api/price-bank` reports `{source: "quotely-live"|"cache"|"fallback", version, itemCount}`; `POST /api/price-bank/refresh` re-pulls the live bank on demand. The list view shows which bank is feeding the generator.
+
+Punch-list and follow-up rules are sitevisit-specific and stay in this repo (`public/generate.js`).
+
+## Quotely handoff contract
+
+A sitevisit quote draft **is** a quotely quote. `GET /api/visits/:id/quotely-payload`
+returns exactly what quotely-ai's `POST /api/quotes/import` accepts:
+`{source: "sitevisit-ai", visitId, visitNumber, customer, address, trade,
+description, items[], photos[], taxPct, discountPct, followUpDate, notes, status}`.
+Status mapping: `draft→draft`, `sent→sent`, `approved/scheduled/invoiced/paid→won`.
+Photos ride along (first 8); the soonest open follow-up becomes the quote's
+follow-up date. Re-sending updates the same quotely quote (upsert on `visitId`);
+the visit records the quotely quote number in `sentToQuotely`.
 
 MIT licensed.

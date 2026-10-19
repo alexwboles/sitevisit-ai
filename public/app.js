@@ -169,6 +169,13 @@
 
   function renderList() {
     show("view-list");
+    api("/api/price-bank").then(function (b) {
+      var el = document.getElementById("bank-src");
+      if (el && b && b.version) {
+        el.textContent = "Price bank v" + b.version + " (" +
+          (b.source === "quotely-live" ? "live from Quotely" : b.source === "cache" ? "cached copy" : "shipped snapshot") + ")";
+      }
+    }).catch(function () { /* bank info is informational only */ });
     var sel = document.getElementById("visit-trade-filter");
     if (!sel.options.length) {
       sel.innerHTML = '<option value="">All trades</option>' +
@@ -547,6 +554,18 @@
     if (head) head.appendChild(copyBtn);
   }
 
+  /* ---------- quotely handoff ---------- */
+  function renderQuotelyLink(v) {
+    var el = document.getElementById("quotely-link");
+    var st = v && v.sentToQuotely;
+    if (!el) return;
+    el.innerHTML = st && st.quoteNumber
+      ? "In Quotely as <strong>" + esc(st.quoteNumber) + "</strong>" +
+        (st.at ? " · sent " + esc(st.at.slice(0, 10)) : "") +
+        ' <span class="muted">— re-sending updates that quote, never duplicates it.</span>'
+      : "";
+  }
+
   function renderVisit(id) {
     show("view-doc");
     api("/api/visits/" + id).then(function (j) {
@@ -583,6 +602,28 @@
         strip.innerHTML = "";
       }
       renderGenerated(v);
+      renderQuotelyLink(v);
+      document.getElementById("btn-send-quotely").onclick = function () {
+        if (!v.generated || !(v.generated.items || []).length) {
+          if (!confirm("This visit has no generated quote draft yet. Send anyway?")) return;
+        }
+        var btn = document.getElementById("btn-send-quotely");
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        api("/api/visits/" + id + "/send-to-quotely", { method: "POST" })
+          .then(function (r) {
+            btn.disabled = false;
+            btn.textContent = "Send to Quotely";
+            currentVisit = r.visit || v;
+            renderQuotelyLink(currentVisit);
+            alert((r.created ? "Created " : "Updated ") + r.quote.number + " in Quotely.");
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            btn.textContent = "Send to Quotely";
+            alert("Error: " + e.message);
+          });
+      };
       document.getElementById("btn-dup-visit").onclick = function () {
         api("/api/visits/" + id + "/duplicate", { method: "POST" })
           .then(function (r) { location.hash = "#/visit/" + r.visit.id; })

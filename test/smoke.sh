@@ -137,5 +137,45 @@ grep -q 'data-due' "$DIR/public/app.js" && ok "app.js edits follow-up due dates"
 grep -q 'data-rm-follow' "$DIR/public/app.js" && ok "app.js can remove follow-ups" || bad "app.js missing follow-up removal"
 grep -q 'buildClientMessage' "$DIR/public/app.js" && ok "app.js builds copy-ready client quote message" || bad "app.js missing client message"
 
+# price bank contract: quotely-ai owns it, sitevisit-ai consumes it
+PB=$(curl -s "$BASE/api/price-bank")
+echo "$PB" | grep -q '"version":"1.0.0"' && ok "price bank version 1.0.0 (quotely-ai owned)" || bad "price bank version: ${PB:0:150}"
+echo "$PB" | grep -q '"owner":"quotely-ai"' && ok "price bank names quotely-ai as owner" || bad "owner missing"
+echo "$PB" | grep -q '"source":"fallback"' && ok "price bank source=fallback without QUOTELY_URL" || bad "source: ${PB:0:150}"
+PBN=$(echo "$PB" | python3 -c "import json,sys; print(json.load(sys.stdin)['itemCount'])")
+[ "$PBN" -ge 60 ] && ok "price bank feeds $PBN line items" || bad "itemCount: $PBN"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/price-bank/refresh")" = "502" ] \
+  && ok "price-bank refresh without QUOTELY_URL -> 502 (keeps shipped snapshot)" || bad "refresh http"
+node -e "
+var E=require('$DIR/public/generate.js');
+var pl=E.lineBankFor('Plumbing', null);
+if(!pl.length) throw new Error('empty plumbing slice');
+var f=pl.filter(function(e){return e.d.indexOf('Faucet')!==-1;})[0];
+if(!f||f.price!==145) throw new Error('faucet price');
+if(E.quotelyStatusFor('approved')!=='won'||E.quotelyStatusFor('paid')!=='won'||E.quotelyStatusFor('sent')!=='sent'||E.quotelyStatusFor('draft')!=='draft') throw new Error('status map');
+var p=E.quotelyPayload({id:'v1',number:'SV-2026-0001',client:'C',address:'A',trade:'Plumbing',status:'approved',observations:['faucet drips'],photoNotes:[],photos:[{name:'n',dataUrl:'d'}],generated:{items:[{description:'x',qty:1,unit:'each',unitPrice:10}],totals:{taxPct:5,discountPct:0},followUps:[{task:'t',due:'2026-11-01',done:false}],punchList:[]}});
+if(p.source!=='sitevisit-ai'||p.visitId!=='v1'||p.status!=='won'||p.taxPct!==5||p.followUpDate!=='2026-11-01') throw new Error('payload '+JSON.stringify(p));
+" && ok "engine: lineBankFor slices canonical bank; status map + quotelyPayload contract" || bad "engine contract"
+
+# quotely handoff: payload endpoint + send without QUOTELY_URL
+VQ=$(curl -s -X POST "$BASE/api/visits" -H 'Content-Type: application/json' \
+  -d '{"client":"Handoff Case","address":"9 Pipe St","trade":"Plumbing","observations":["faucet drips"],"photoNotes":[],"generated":{"items":[{"description":"Faucet replacement (parts + labor)","qty":1,"unit":"each","unitPrice":145}],"punchList":[],"followUps":[],"totals":{"subtotal":145,"discountPct":0,"taxPct":0,"total":145}}}')
+VQID=$(echo "$VQ" | python3 -c "import json,sys; print(json.load(sys.stdin)['visit']['id'])" 2>/dev/null)
+curl -s -X PATCH "$BASE/api/visits/$VQID" -H 'Content-Type: application/json' -d '{"status":"approved"}' >/dev/null
+QP=$(curl -s "$BASE/api/visits/$VQID/quotely-payload")
+echo "$QP" | grep -q '"status":"won"' && echo "$QP" | grep -q '"visitId":"'"$VQID"'"' \
+  && echo "$QP" | grep -q 'Faucet replacement' && ok "quotely-payload mirrors the import contract (approved -> won)" || bad "payload: ${QP:0:250}"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/visits/$VQID/send-to-quotely")" = "400" ] \
+  && ok "send-to-quotely without QUOTELY_URL -> 400 (documented)" || bad "send-to-quotely http"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/visits/nope/quotely-payload")" = "404" ] \
+  && ok "quotely-payload 404s on unknown visit" || bad "payload 404"
+
+# quotely handoff UI wiring
+grep -q 'btn-send-quotely' "$DIR/public/index.html" && ok "index.html has Send to Quotely button" || bad "index.html missing send button"
+grep -q 'btn-send-quotely' "$DIR/public/app.js" && ok "app.js wires send-to-quotely" || bad "app.js missing send wiring"
+grep -q 'quotely-link' "$DIR/public/app.js" && ok "app.js shows quotely quote link" || bad "app.js missing quotely link"
+grep -q 'bank-src' "$DIR/public/index.html" && ok "index.html shows price-bank source" || bad "index.html missing bank source"
+curl -s -X DELETE "$BASE/api/visits/$VQID" >/dev/null
+
 echo "RESULT: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
